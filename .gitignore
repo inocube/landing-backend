@@ -1,0 +1,7 @@
+.aws-sam/
+__pycache__/
+*.pyc
+.env
+samconfig.toml     # ZVAZ: obsahuje nastavenia, nie tajomstva -
+                   # niekto ho commituje, niekto nie. Pre teamovy
+                   # projekt skor commitni (bez citlivych hodnot).
