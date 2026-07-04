@@ -22,8 +22,51 @@ Resources:
           Properties:
             Path: /health
             Method: get
+  LeadsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: inocube-leads
+      BillingMode: PAY_PER_REQUEST # on-demand: platíš za requesty, nie za rezervovanú kapacitu
+      AttributeDefinitions:
+        - AttributeName: PK
+          AttributeType: S
+        - AttributeName: SK
+          AttributeType: S
+        - AttributeName: GSI1PK
+          AttributeType: S
+        - AttributeName: GSI1SK
+          AttributeType: S
+        - AttributeName: GSI2PK
+          AttributeType: S
+        - AttributeName: GSI2SK
+          AttributeType: S
+      KeySchema:
+        - AttributeName: PK
+          KeyType: HASH
+        - AttributeName: SK
+          KeyType: RANGE
+      GlobalSecondaryIndexes:
+        - IndexName: GSI1
+          KeySchema:
+            - AttributeName: GSI1PK
+              KeyType: HASH
+            - AttributeName: GSI1SK
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+        - IndexName: GSI2
+          KeySchema:
+            - AttributeName: GSI2PK
+              KeyType: HASH
+            - AttributeName: GSI2SK
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
 
 Outputs:
   ApiUrl:
     Description: "Base URL API Gateway"
     Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/"
+  LeadsTableName:
+    Description: "Názov DynamoDB tabuľky pre leady"
+    Value: !Ref LeadsTable
