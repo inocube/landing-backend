@@ -1,0 +1,13 @@
+{
+  "PK": { "S": "LEAD#test-001" },
+  "SK": { "S": "LEAD#test-001" },
+  "GSI1PK": { "S": "LEAD" },
+  "GSI1SK": { "S": "2026-07-03T14:30:00Z" },
+  "GSI2PK": { "S": "EMAIL#roman@example.com" },
+  "GSI2SK": { "S": "2026-07-03T14:30:00Z" },
+  "email": { "S": "roman@example.com" },
+  "name": { "S": "Roman" },
+  "message": { "S": "Mam zaujem o spolupracu" },
+  "created_at": { "S": "2026-07-03T14:30:00Z" },
+  "status": { "S": "NEW" }
+}

@@ -1,0 +1,9 @@
+{
+  "TableName": "inocube-leads",
+  "IndexName": "GSI1",
+  "KeyConditionExpression": "GSI1PK = :pk",
+  "ExpressionAttributeValues": {
+    ":pk": { "S": "LEAD" }
+  },
+  "ScanIndexForward": false
+}
