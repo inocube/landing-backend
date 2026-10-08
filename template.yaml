@@ -22,6 +22,26 @@ Resources:
           Properties:
             Path: /health
             Method: get
+  LeadsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/leads/
+      Handler: app.lambda_handler
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref LeadsTable
+          # Empty in AWS. Declared so `sam local start-api --env-vars` can point it at DynamoDB Local.
+          DYNAMODB_ENDPOINT: ""
+      Policies:
+        # Least privilege: PutItem/UpdateItem/BatchWriteItem on this table only, no reads.
+        - DynamoDBWritePolicy:
+            TableName: !Ref LeadsTable
+      Events:
+        CreateLead:
+          Type: Api
+          Properties:
+            Path: /leads
+            Method: post
   LeadsTable:
     Type: AWS::DynamoDB::Table
     Properties:
