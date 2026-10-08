@@ -15,12 +15,11 @@ jobs:
 
     steps:
       - name: Check for Approved label
-        env:
-          LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
+        if: contains(github.event.pull_request.labels.*.name, 'Approved')
+        run: echo "PR has the Approved label."
+
+      - name: Approved label is missing
+        if: "!contains(github.event.pull_request.labels.*.name, 'Approved')"
         run: |
-          if [[ ",$LABELS," == *",Approved,"* ]]; then
-            echo "PR has the Approved label."
-          else
-            echo "PR does not have the Approved label."
-            exit 1
-          fi
+          echo "PR does not have the Approved label."
+          exit 1
