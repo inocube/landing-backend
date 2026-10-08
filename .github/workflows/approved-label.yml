@@ -1,0 +1,26 @@
+name: Check Approved Label
+
+on:
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - labeled
+      - unlabeled
+      - reopened
+
+jobs:
+  approved:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check for Approved label
+        env:
+          LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
+        run: |
+          if [[ ",$LABELS," == *",Approved,"* ]]; then
+            echo "PR has the Approved label."
+          else
+            echo "PR does not have the Approved label."
+            exit 1
+          fi
