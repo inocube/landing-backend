@@ -1,0 +1,6 @@
+# Local dev and test only (not packaged into Lambda).
+pytest
+moto[dynamodb]
+boto3
+pydantic
+email-validator
