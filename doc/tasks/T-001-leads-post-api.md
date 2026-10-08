@@ -1,6 +1,6 @@
 # T-001: POST /leads endpoint
 
-- Status: review
+- Status: approved
 - Roadmap phase: 2
 - Branch: feat/T-001-leads-post-api
 
@@ -67,4 +67,36 @@ the backend is ready for the website form to be connected (phase 2b).
   - Tests build the moto table from `local-test/table-schema.json` (same schema as DynamoDB Local).
 
 ## Architect review
-(architect)
+Verdict: approved
+
+Re-run by architect: `pytest` 28 passed; `sam validate --lint` valid. `sam build` / `sam local` not re-run (taken
+from implementation notes). All scope items 1–8 and acceptance criteria are met; no scope creep, no ADR conflict
+(key design matches AGENTS.md / ADR 0005), no secrets, no deploy. Nothing blocking; findings below are
+non-blocking and can go into this PR or a follow-up.
+
+Findings (highest first):
+1. Medium, exposure: `template.yaml:43` adds a public, unauthenticated write endpoint with no API throttling,
+   no reserved concurrency and on-demand DynamoDB, so the cost and junk-data ceiling is unbounded until phase 2b.
+   Acceptable only because the task defers throttling. Fix: do not deploy before 2b, or the owner explicitly
+   accepts it (see questions).
+2. Low, docs accuracy: `template.yaml:36` and `doc/architecture.md:61` say "no reads". `DynamoDBWritePolicy`
+   grants `UpdateItem`/`PutItem`, and both can return the old item with `ReturnValues: ALL_OLD`, so the role can
+   read an item whose key it knows. Real risk is low (uuid keys, code never asks for it). Fix: reword to
+   "write actions only (no Get/Query/Scan)"; optionally a one-action inline `dynamodb:PutItem` policy later.
+3. Low, robustness: `src/leads/app.py:15,52` maps every `value_error` to the e-mail message. Correct today
+   (only `EmailStr` raises it), but a future custom validator on another field would get a wrong message.
+   Fix: key the override on `(field, type)` or on `loc == ("email",)`.
+4. Low, cold start/operability: `template.yaml:8` 128 MB with pydantic-core + `boto3.resource`
+   (`src/leads/repository.py:23`) gives a slow first request (CPU scales with memory). Fix: measure
+   `Init Duration` after deploy; consider 256 MB and `boto3.client` (lighter than the resource API).
+5. Low, input hygiene: `src/leads/models.py:13-17` accepts control characters (e.g. `\x00`) in `name` and
+   `message`. Harmless for storage, but phase 2b SES / any admin UI will render them. Fix (2b): reject or strip
+   C0 control chars except `\n`, `\t`.
+6. Nit, test strength: `tests/unit/leads/test_leads_api.py:47` asserts `"email": item["email"]` (tautology).
+   Fix: assert the exact stored value `Jana.Testovacia@example.com` (EmailStr lowercases the domain only).
+7. Nit, idempotency: a double-submitted form creates two leads; `ConditionExpression` (`repository.py:57`)
+   only guards uuid collisions. Fine at this scale; 2b can dedupe via GSI2 or a client idempotency key.
+
+Questions for the owner:
+- Deploy `POST /leads` to prod before phase 2b (no throttling/CORS/honeypot), or wait for 2b?
+- Add CloudWatch log retention (e.g. 30–90 days) for all functions in a follow-up? Default is never expire.
