@@ -1,7 +1,16 @@
+# Secrets: never commit. Only the template is tracked.
+.env
+.env.*
+!.env.example
+
+# SAM build output
 .aws-sam/
+
+# Python
 __pycache__/
 *.pyc
-.env
-samconfig.toml     # ZVAZ: obsahuje nastavenia, nie tajomstva -
-                   # niekto ho commituje, niekto nie. Pre teamovy
-                   # projekt skor commitni (bez citlivych hodnot).
+.venv/
+.pytest_cache/
+.coverage
+
+# Note: samconfig.toml is committed on purpose (settings only, no secrets).
