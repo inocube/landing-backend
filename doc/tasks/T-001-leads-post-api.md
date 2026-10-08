@@ -1,6 +1,6 @@
 # T-001: POST /leads endpoint
 
-- Status: in-progress
+- Status: review
 - Roadmap phase: 2
 - Branch: feat/T-001-leads-post-api
 
@@ -51,7 +51,20 @@ the backend is ready for the website form to be connected (phase 2b).
 (none)
 
 ## Implementation notes
-(implementer)
+- Branch `feat/T-001-leads-post-api`; PR: https://github.com/inocube/landing-backend/compare/main...feat/T-001-leads-post-api?expand=1
+- Verified: `pytest` 28 passed (incl. health); `sam validate --lint` valid; `sam build --use-container`
+  succeeded (pydantic-core built as `aarch64-linux`); `sam local start-api` + DynamoDB Local: valid body 201
+  and lead found via GSI1 query, invalid body / invalid JSON 400. Local cold starts under x86 emulation of
+  arm64 exceeded the 10 s timeout, so that run used a temporary copy of the built template with
+  Timeout 60 / 512 MB (not committed). Not an issue on real Graviton Lambda.
+- Deviations / additions:
+  - `DYNAMODB_ENDPOINT: ""` declared in `template.yaml`: `sam local --env-vars` only overrides variables the
+    template declares. Empty means real AWS. Values for local use: `local-test/sam-local-env.json`.
+  - `PutItem` uses `ConditionExpression attribute_not_exists(PK)` so a lead is never overwritten.
+  - `created_at` has millisecond precision (`2026-10-08T15:28:15.083Z`) for stable GSI ordering.
+  - 400 `details` replace the e-mail validator message with fixed text, because email-validator messages
+    can quote parts of the input.
+  - Tests build the moto table from `local-test/table-schema.json` (same schema as DynamoDB Local).
 
 ## Architect review
 (architect)
