@@ -11,7 +11,8 @@ Last updated: 2026-10-08
 
 ## In progress
 
-- T-001 POST /leads (roadmap phase 2): task written, not started.
+- T-001 POST /leads (roadmap phase 2): implemented on `feat/T-001-leads-post-api`, in review, not deployed.
+  `LeadsFunction` validates (pydantic) and stores leads; unit tests with moto.
 
 ## Not done yet
 

@@ -32,9 +32,13 @@ Python 3.14, AWS CLI v2, SAM CLI, Docker, an SSO login (`aws sso login --profile
 cp .env.example .env                     # then adjust values
 docker start dynamodb-local              # DynamoDB Local on :8000
 sam build --use-container                # container build: Lambda is Linux/arm64
-sam local start-api                      # API on http://127.0.0.1:3000
-curl http://127.0.0.1:3000/health
+sam local start-api --env-vars local-test/sam-local-env.json   # API on http://127.0.0.1:3000
+curl.exe http://127.0.0.1:3000/health
+curl.exe -i -X POST http://127.0.0.1:3000/leads -H "Content-Type: application/json" --data-binary "@local-test/lead-post-valid.json"
 ```
+
+The table must exist in DynamoDB Local first (in-memory, so again after every restart):
+`aws dynamodb create-table --cli-input-json file://local-test/table-schema.json --endpoint-url http://localhost:8000`.
 
 ## Test
 

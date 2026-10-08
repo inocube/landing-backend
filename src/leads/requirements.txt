@@ -1,0 +1,3 @@
+# Packaged into the Lambda by `sam build`. boto3 ships with the runtime: do not add it here.
+pydantic>=2.7,<3
+email-validator>=2.1,<3
