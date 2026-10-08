@@ -1,6 +1,6 @@
 # T-001: POST /leads endpoint
 
-- Status: ready
+- Status: in-progress
 - Roadmap phase: 2
 - Branch: feat/T-001-leads-post-api
 
