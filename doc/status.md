@@ -15,7 +15,7 @@ Last updated: 2026-10-08
 
 ## In progress
 
-- Nothing. Next: phase 2b hardening tasks (see roadmap).
+- T-002 align AWS access with ADR 0004 (owner task). Next: phase 2b hardening tasks (see roadmap).
 
 ## Not done yet
 
@@ -26,6 +26,6 @@ Last updated: 2026-10-08
 ## Known issues
 
 - AWS access differs from ADR 0004: the SSO user has only `InocubeDevAccess`, which can create
-  IAM roles (broader than PowerUserAccess). `InocubeSamDeploy` and the `inocube-deploy` profile
-  do not exist; the T-001 deploy ran with `inocube`. Owner decision pending.
+  IAM roles. `InocubeSamDeploy` and the `inocube-deploy` profile do not exist; the T-001 deploy ran
+  with `inocube`. Owner decided to align AWS with the ADR: `doc/tasks/T-002-aws-access-alignment.md`.
 - Commit `17193d5 "test direct push"` is in `main` history (from testing branch protection). Harmless.
