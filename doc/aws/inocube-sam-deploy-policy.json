@@ -46,22 +46,54 @@
       "Sid": "ExecutionRoles",
       "Effect": "Allow",
       "Action": [
-        "iam:CreateRole",
         "iam:DeleteRole",
         "iam:GetRole",
         "iam:UpdateRole",
         "iam:PassRole",
         "iam:TagRole",
         "iam:UntagRole",
-        "iam:AttachRolePolicy",
         "iam:DetachRolePolicy",
-        "iam:PutRolePolicy",
         "iam:GetRolePolicy",
         "iam:DeleteRolePolicy",
         "iam:ListRolePolicies",
         "iam:ListAttachedRolePolicies"
       ],
       "Resource": "arn:aws:iam::754895435437:role/inocube-backend-*"
+    },
+    {
+      "Sid": "CreateRolesOnlyWithBoundary",
+      "Effect": "Allow",
+      "Action": [
+        "iam:CreateRole",
+        "iam:PutRolePolicy",
+        "iam:AttachRolePolicy",
+        "iam:PutRolePermissionsBoundary"
+      ],
+      "Resource": "arn:aws:iam::754895435437:role/inocube-backend-*",
+      "Condition": {
+        "StringEquals": {
+          "iam:PermissionsBoundary": "arn:aws:iam::754895435437:policy/InocubeLambdaBoundary"
+        }
+      }
+    },
+    {
+      "Sid": "NeverTouchBoundariesOrIdentity",
+      "Effect": "Deny",
+      "Action": [
+        "iam:DeleteRolePermissionsBoundary",
+        "iam:CreatePolicyVersion",
+        "iam:DeletePolicy",
+        "iam:SetDefaultPolicyVersion",
+        "iam:CreateUser",
+        "iam:CreateAccessKey",
+        "iam:AttachUserPolicy",
+        "iam:PutUserPolicy",
+        "iam:CreateLoginProfile",
+        "sso:*",
+        "identitystore:*",
+        "organizations:*"
+      ],
+      "Resource": "*"
     },
     {
       "Sid": "ApiGateway",
@@ -119,7 +151,10 @@
     {
       "Sid": "ProdParameters",
       "Effect": "Allow",
-      "Action": ["ssm:GetParameter", "ssm:GetParameters"],
+      "Action": [
+        "ssm:GetParameter",
+        "ssm:GetParameters"
+      ],
       "Resource": "arn:aws:ssm:eu-central-1:754895435437:parameter/inocube/*"
     }
   ]
