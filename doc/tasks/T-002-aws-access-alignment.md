@@ -22,11 +22,12 @@ The T-001 deploy (2026-10-08) ran with the owner's SSO session (`InocubeDevAcces
 2. **IAM Identity Center → Permission sets → Create → Custom**, name `InocubeSamDeploy`, session 1 h,
    inline policy from [`doc/aws/inocube-sam-deploy-policy.json`](../aws/inocube-sam-deploy-policy.json).
 3. **Narrow your daily set**: `InocubeDevAccess` keeps only the AWS managed `PowerUserAccess`.
-4. **Agent identity** (owner picks the route in the project thread):
-   - *GitHub OIDC (recommended)*: done in phase 3. Agents hold no AWS credentials at all; deploy runs in
-     GitHub Actions after the owner merges.
-   - *Technical Identity Center user* `inocube-agent` with only `InocubeSamDeploy` on 754895435437, its own
-     MFA. The agent on the PC uses profile `inocube-agent`; the owner signs it in, never with his own user.
+4. **Agent user** `inocube-agent` (IAM user, owner's choice 2026-10-09): no console password, MFA on,
+   inline policy only [`doc/aws/inocube-agent-readonly-policy.json`](../aws/inocube-agent-readonly-policy.json)
+   (read stack, logs, metrics; no lead data, no writes, IAM/SSO denied). The owner runs
+   `aws configure --profile inocube-agent` himself; agents never see the keys. Rotate the key every 90 days.
+5. **Deploys** run from GitHub Actions with an OIDC role carrying `InocubeSamDeploy` (phase 3), so no agent
+   needs write access. Until then the owner deploys.
 
 ## Implementer change (before the first deploy with the new policy)
 
@@ -36,6 +37,7 @@ The T-001 deploy (2026-10-08) ran with the owner's SSO session (`InocubeDevAcces
 
 ## Acceptance criteria
 
+- `inocube-agent`: `aws iam list-users` and any write call fail with AccessDenied.
 - Deploy identity: `sam deploy --no-execute-changeset` on `main` shows only the boundary added to
   `LeadsFunctionRole`, with no AccessDenied.
 - Deploy identity: `aws iam create-user` and `aws iam create-role` without the boundary fail with AccessDenied.
