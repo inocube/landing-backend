@@ -1,6 +1,6 @@
 # T-004: Harden POST /leads for the public website form
 
-- Status: review
+- Status: changes-requested
 - Roadmap phase: 2b
 - Branch: feat/T-004-leads-hardening
 
@@ -97,4 +97,39 @@ Before merging (the merge deploys prod). AWS console as admin, region `eu-centra
   answer); duplicate submissions; `www.inocube.sk` not allowed. Follow-up: `ses:FromAddress` condition.
 
 ## Architect review
-(architect)
+Verdict: changes-requested (one small fix; deploy path itself looks clean)
+
+Checked: ruff clean, pytest 95 passed, `sam validate --lint` OK. SAM translator diff vs `origin/main`: same logical
+IDs (`ServerlessRestApi`, `ServerlessRestApiProdStage`, roles, `LeadsTable` untouched), so the API id/URL stays;
+changes are in-place updates (RestApi body PUT incl. gateway responses, Stage PATCH for MethodSettings, new
+Deployment, new OPTIONS permission, inline `LeadsFunctionRolePolicy1` via `iam:PutRolePolicy` on a role that
+already has the boundary, so the `iam:PermissionsBoundary` condition holds). Two new log groups match the
+deploy-policy and boundary prefix `/aws/lambda/inocube-backend-*`; the boundary wildcard also covers
+`...:log-stream:*` for CreateLogStream/PutLogEvents. SES role ∩ boundary = domain + recipient identity; X-Ray
+unchanged. Without owner steps 3/4 the worst case is a clean rollback (log groups) or a logged
+`AccessDenied` with 201 (SES), never data loss.
+
+Findings
+1. Medium - `src/leads/notifier.py:19`: SES client uses botocore defaults (legacy retries, 5 attempts with
+   exponential backoff, 60 s connect/read timeouts) inside a 10 s Lambda. SES sandbox allows 1 mail/s while the
+   API admits 5+/s, so `TooManyRequests` retries (worst case ~15 s) can time the Lambda out after the lead is
+   stored: client gets 502, retries, duplicate lead. Fix: `Config(connect_timeout=2, read_timeout=3,
+   retries={"mode": "standard", "max_attempts": 2})` and a test that the client is built with it.
+2. Low - `template.yaml:25`, `doc/architecture.md:7,27`, `doc/status.md:22`: `/*` + `*` method settings throttle
+   each method separately (POST /leads, OPTIONS /leads, GET /health: 5 req/s each), not "per stage". Fix the
+   wording (or accept a ~15 req/s total cap knowingly).
+3. Low - `src/leads/models.py:15`: only `Cc` is rejected; U+2028/U+2029 (`Zl`/`Zp`) and bidi/format chars
+   (`Cf`, e.g. U+202E) pass into the owner e-mail and the stored name. Consider rejecting `Cf`/`Zl`/`Zp` in
+   `name` (and `Zl`/`Zp` in `message`); optional.
+4. Info - `src/leads/cors.py:13`: preview origins are allowed although the frontend only sets the API URL in
+   Production, and Netlify builds previews for fork PRs of a public repo. Not a real risk (CORS does not stop
+   server-side posts) but it is unused allowlist surface; keep only if previews will ever call the API.
+5. Info - header injection: subject is the uuid only, From/To fixed, `email` checked for control chars before
+   EmailStr; body is plain text. No PII in logs (tests assert it). Honeypot and SES-failure paths proven by tests.
+
+Questions for the owner
+- Is the site served on `https://inocube.sk` (apex) with `www` redirecting? If `www` is primary, the form fails
+  CORS; add it to `ALLOWED_ORIGIN_PATTERNS` and the gateway responses.
+- Set `Reply-To` to the lead's address so you can answer from your mail client? (structured SES field, no
+  injection risk; still a manual reply per ADR 0007.)
+- Order: do steps 1-4 before merge (DKIM can take hours); step 4 is likely needed by the LogGroup handler (untested), 1-3 only for e-mail.
