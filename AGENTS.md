@@ -48,6 +48,8 @@ the owner's portfolio, so code quality and clear commits matter as much as worki
 - Never push to `main`, never force-push a shared branch, never merge your own PR.
 - Never run `sam deploy`, `aws ... delete-*` or anything that changes AWS resources unless the task says so
   explicitly. The owner deploys.
+- Never use the owner's AWS identity: no `aws sso login` for him, no profiles `inocube` / `inocube-deploy`,
+  never ask him for sign-in codes. Agents may deploy only with a restricted technical identity (ADR 0011).
 - Infrastructure changes go through `template.yaml` only, never by hand in the console.
 - Least privilege: use the narrowest SAM policy template (e.g. `DynamoDBWritePolicy` over `DynamoDBCrudPolicy`).
 - No personal data in logs: log IDs and outcomes, never names, emails or message bodies (GDPR).
@@ -76,5 +78,5 @@ the owner's portfolio, so code quality and clear commits matter as much as worki
 
 - Owner works on Windows + PowerShell. Give commands that work in PowerShell; for AWS CLI JSON input use
   `file://` arguments instead of inline escaped JSON.
-- AWS profiles: `inocube` (PowerUserAccess, daily work), `inocube-deploy` (can create IAM roles, for deploys).
+- AWS profiles `inocube` and `inocube-deploy` belong to the owner; agents do not use them (ADR 0011).
 - Build with `sam build --use-container` (compiled deps such as pydantic-core must be Linux/arm64).
