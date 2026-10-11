@@ -46,6 +46,9 @@ Resources:
             Method: post
   LeadsTable:
     Type: AWS::DynamoDB::Table
+    # Keep the table and its leads even if the stack is deleted or a change would replace the table.
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       TableName: inocube-leads
       BillingMode: PAY_PER_REQUEST # on-demand: platíš za requesty, nie za rezervovanú kapacitu
