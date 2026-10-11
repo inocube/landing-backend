@@ -19,20 +19,39 @@
     {
       "Sid": "OwnLogs",
       "Effect": "Allow",
-      "Action": ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"],
+      "Action": [
+        "logs:CreateLogGroup",
+        "logs:CreateLogStream",
+        "logs:PutLogEvents"
+      ],
       "Resource": "arn:aws:logs:eu-central-1:754895435437:log-group:/aws/lambda/inocube-backend-*"
     },
     {
       "Sid": "ProjectParameters",
       "Effect": "Allow",
-      "Action": ["ssm:GetParameter", "ssm:GetParameters"],
+      "Action": [
+        "ssm:GetParameter",
+        "ssm:GetParameters"
+      ],
       "Resource": "arn:aws:ssm:eu-central-1:754895435437:parameter/inocube/*"
     },
     {
       "Sid": "SendMailFromOwnDomain",
       "Effect": "Allow",
-      "Action": ["ses:SendEmail", "ses:SendRawEmail"],
+      "Action": [
+        "ses:SendEmail",
+        "ses:SendRawEmail"
+      ],
       "Resource": "arn:aws:ses:eu-central-1:754895435437:identity/inocube.sk"
+    },
+    {
+      "Sid": "XRayTracing",
+      "Effect": "Allow",
+      "Action": [
+        "xray:PutTraceSegments",
+        "xray:PutTelemetryRecords"
+      ],
+      "Resource": "*"
     }
   ]
 }

@@ -9,6 +9,8 @@ Globals:
     Runtime: python3.14
     Architectures: [arm64] # Graviton - lacnejsi a rychlejsi
     Tracing: Active # X-Ray tracing hned od zaciatku
+    # Ceiling for every role SAM generates; the deploy role may create roles only with it (ADR 0011).
+    PermissionsBoundary: !Sub arn:aws:iam::${AWS::AccountId}:policy/InocubeLambdaBoundary
 
 Resources:
   HealthFunction:
