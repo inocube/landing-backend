@@ -2,15 +2,51 @@ AWSTemplateFormatVersion: "2010-09-09"
 Transform: AWS::Serverless-2016-10-31
 Description: inocube backend - Phase 0 skeleton
 
+Parameters:
+  NotifyEmail:
+    Type: String
+    Default: inocube@varga.slmail.me
+    AllowedPattern: "^[^@\\s]+@[^@\\s]+$"
+    Description: >-
+      Recipient of the new-lead e-mail. While SES is in the sandbox it must be a verified SES identity,
+      and InocubeWebLambdaBoundary must allow its identity ARN (doc/tasks/T-004-leads-hardening.md).
+
 Globals:
   Function:
     Timeout: 10
-    MemorySize: 128
+    MemorySize: 256
     Runtime: python3.14
     Architectures: [arm64] # Graviton - lacnejsi a rychlejsi
     Tracing: Active # X-Ray tracing hned od zaciatku
     # Ceiling for every role SAM generates; the deploy role may create roles only with it (ADR 0011).
     PermissionsBoundary: !Sub arn:aws:iam::${AWS::AccountId}:policy/InocubeWebLambdaBoundary
+  # Applies to the implicit API (ServerlessRestApi), so the API and its URL stay the same.
+  Api:
+    # Cost guard: at most 5 requests/s (bursts of 10) per stage; more get 429 before any Lambda runs.
+    MethodSettings:
+      - ResourcePath: "/*"
+        HttpMethod: "*"
+        ThrottlingRateLimit: 5
+        ThrottlingBurstLimit: 10
+    # Errors produced by API Gateway itself (429 throttled, 403, 5xx) never reach the Lambda, so they get
+    # a fixed CORS header here; otherwise the browser on inocube.sk sees a CORS error instead of a 429.
+    # Gateway responses cannot match origins, so Netlify previews do not get it (only inocube.sk).
+    GatewayResponses:
+      DEFAULT_4XX:
+        ResponseParameters:
+          Headers:
+            Access-Control-Allow-Origin: "'https://inocube.sk'"
+            Vary: "'Origin'"
+        ResponseTemplates:
+          # Same shape as the Lambda's errors; messageString is already a quoted JSON string.
+          application/json: '{"error":$context.error.messageString}'
+      DEFAULT_5XX:
+        ResponseParameters:
+          Headers:
+            Access-Control-Allow-Origin: "'https://inocube.sk'"
+            Vary: "'Origin'"
+        ResponseTemplates:
+          application/json: '{"error":$context.error.messageString}'
 
 Resources:
   HealthFunction:
@@ -18,6 +54,8 @@ Resources:
     Properties:
       CodeUri: src/health/
       Handler: app.lambda_handler
+      LoggingConfig:
+        LogGroup: !Ref HealthLogGroup
       Events:
         HealthApi:
           Type: Api
@@ -29,21 +67,54 @@ Resources:
     Properties:
       CodeUri: src/leads/
       Handler: app.lambda_handler
+      LoggingConfig:
+        LogGroup: !Ref LeadsLogGroup
       Environment:
         Variables:
           TABLE_NAME: !Ref LeadsTable
           # Empty in AWS. Declared so `sam local start-api --env-vars` can point it at DynamoDB Local.
           DYNAMODB_ENDPOINT: ""
+          NOTIFY_FROM: noreply@inocube.sk
+          NOTIFY_TO: !Ref NotifyEmail
       Policies:
         # Least privilege: PutItem/UpdateItem/BatchWriteItem on this table only, no reads.
         - DynamoDBWritePolicy:
             TableName: !Ref LeadsTable
+        # SES checks ses:SendEmail against the sender's identity (domain inocube.sk) and, while the account
+        # is in the SES sandbox, also against the recipient's identity. No SESCrudPolicy: that adds
+        # identity management and sending from any identity.
+        - Statement:
+            - Sid: SendLeadNotification
+              Effect: Allow
+              Action: ses:SendEmail
+              Resource:
+                - !Sub arn:aws:ses:${AWS::Region}:${AWS::AccountId}:identity/inocube.sk
+                - !Sub arn:aws:ses:${AWS::Region}:${AWS::AccountId}:identity/${NotifyEmail}
       Events:
         CreateLead:
           Type: Api
           Properties:
             Path: /leads
             Method: post
+        # CORS preflight; the Lambda decides which origins are allowed (see src/leads/cors.py).
+        LeadsPreflight:
+          Type: Api
+          Properties:
+            Path: /leads
+            Method: options
+  # Stack-managed log groups with 30-day retention. New names on purpose: the groups Lambda created
+  # (/aws/lambda/<function name>) already exist and CloudFormation cannot create a group with the same
+  # name. The prefix /aws/lambda/<stack name>- matches the deploy policy and the Lambda boundary.
+  HealthLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${AWS::StackName}-health
+      RetentionInDays: 30
+  LeadsLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${AWS::StackName}-leads
+      RetentionInDays: 30
   LeadsTable:
     Type: AWS::DynamoDB::Table
     # Keep the table and its leads even if the stack is deleted or a change would replace the table.

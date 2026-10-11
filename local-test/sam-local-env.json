@@ -1,6 +1,7 @@
 {
   "LeadsFunction": {
     "TABLE_NAME": "inocube-leads",
-    "DYNAMODB_ENDPOINT": "http://host.docker.internal:8000"
+    "DYNAMODB_ENDPOINT": "http://host.docker.internal:8000",
+    "NOTIFY_TO": ""
   }
 }
