@@ -1,17 +1,13 @@
-"""CORS for /leads: which browser origins may call the API and the headers that tell the browser so.
+"""CORS for /leads: which browser origin may call the API and the headers that tell the browser so.
 
-Origin matching lives here, not in API Gateway, because API Gateway CORS settings only take exact origins
-(or ``*``); they cannot express Netlify preview hosts such as ``deploy-preview-12--inocube-public.netlify.app``.
+Only the production site calls the API (owner decision: the apex domain, no ``www``; Netlify previews
+never get the API URL). With a Lambda proxy integration the Lambda must set the CORS headers on its own
+responses anyway, so the preflight is answered here too and the rule lives in one place.
 """
 
-import re
 from typing import Any
 
-ALLOWED_ORIGIN_PATTERNS = (
-    re.compile(r"https://inocube\.sk"),
-    # Netlify deploy previews of the frontend repo (one per pull request).
-    re.compile(r"https://deploy-preview-[1-9][0-9]{0,5}--inocube-public\.netlify\.app"),
-)
+ALLOWED_ORIGINS = frozenset({"https://inocube.sk"})
 ALLOWED_METHODS = "POST, OPTIONS"
 ALLOWED_HEADERS = "Content-Type"
 PREFLIGHT_MAX_AGE_SECONDS = "600"
@@ -26,9 +22,7 @@ def request_origin(event: dict[str, Any]) -> str | None:
 
 
 def is_allowed_origin(origin: str | None) -> bool:
-    return origin is not None and any(
-        pattern.fullmatch(origin) for pattern in ALLOWED_ORIGIN_PATTERNS
-    )
+    return origin in ALLOWED_ORIGINS
 
 
 def cors_headers(origin: str | None) -> dict[str, str]:

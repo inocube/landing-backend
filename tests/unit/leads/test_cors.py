@@ -4,21 +4,17 @@ import app
 import pytest
 
 VALID_LEAD = {"name": "Jana", "email": "jana@example.com", "message": "Ahoj"}
-ALLOWED = [
-    "https://inocube.sk",
-    "https://deploy-preview-1--inocube-public.netlify.app",
-    "https://deploy-preview-123--inocube-public.netlify.app",
-]
+ALLOWED = ["https://inocube.sk"]
 DISALLOWED = [
     "https://evil.example",
     "http://inocube.sk",
     "https://www.inocube.sk",
     "https://inocube.sk.evil.example",
     "https://inocube.sk:8443",
-    "https://deploy-preview-x--inocube-public.netlify.app",
-    "https://deploy-preview-1--inocube-public.netlify.app.evil.example",
-    "https://evil--inocube-public.netlify.app",
-    "https://deploy-preview-1--other-site.netlify.app",
+    "https://inocube.sk/",
+    "https://INOCUBE.SK",
+    "https://deploy-preview-1--inocube-public.netlify.app",
+    "https://inocube-public.netlify.app",
     "null",
     "",
 ]

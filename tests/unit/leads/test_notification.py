@@ -36,6 +36,35 @@ def test_stored_lead_sends_one_email_to_owner(leads_table, ses_domain, outbox):
     assert VALID_LEAD["message"] in email.body
 
 
+def test_ses_client_has_short_timeouts_and_few_retries(mocked_aws):
+    import notifier
+
+    config = notifier._ses().meta.config
+    assert (config.connect_timeout, config.read_timeout) == (2, 3)
+    assert config.retries == {"mode": "standard", "total_max_attempts": 2}
+
+
+@pytest.mark.parametrize(
+    ("email", "reply_to"),
+    [
+        ("Jana.Testovacia@Example.com", "Jana.Testovacia@example.com"),
+        ("jana@\u0161kola.sk", "jana@xn--kola-f6a.sk"),
+        ("\u0161ana@example.com", None),
+    ],
+)
+def test_reply_to_is_the_leads_address(leads_table, monkeypatch, email, reply_to):
+    import notifier
+
+    calls = []
+    monkeypatch.setattr(notifier._ses(), "send_email", lambda **kw: calls.append(kw))
+    status, _ = post({**VALID_LEAD, "email": email})
+
+    assert status == 201
+    (request,) = calls
+    assert request.get("ReplyToAddresses") == ([reply_to] if reply_to else None)
+    assert request["Destination"] == {"ToAddresses": ["owner@example.org"]}
+
+
 def test_each_lead_sends_its_own_email(leads_table, ses_domain, outbox):
     ids = [post(VALID_LEAD)[1]["lead_id"] for _ in range(2)]
 

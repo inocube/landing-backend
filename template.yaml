@@ -22,15 +22,16 @@ Globals:
     PermissionsBoundary: !Sub arn:aws:iam::${AWS::AccountId}:policy/InocubeWebLambdaBoundary
   # Applies to the implicit API (ServerlessRestApi), so the API and its URL stay the same.
   Api:
-    # Cost guard: at most 5 requests/s (bursts of 10) per stage; more get 429 before any Lambda runs.
+    # Cost guard: "/*" + "*" sets the limit for each method separately (POST /leads, OPTIONS /leads,
+    # GET /health: 5 requests/s each, bursts of 10), so about 15 req/s in total. More get 429 before any
+    # Lambda runs.
     MethodSettings:
       - ResourcePath: "/*"
         HttpMethod: "*"
         ThrottlingRateLimit: 5
         ThrottlingBurstLimit: 10
     # Errors produced by API Gateway itself (429 throttled, 403, 5xx) never reach the Lambda, so they get
-    # a fixed CORS header here; otherwise the browser on inocube.sk sees a CORS error instead of a 429.
-    # Gateway responses cannot match origins, so Netlify previews do not get it (only inocube.sk).
+    # the CORS header here; otherwise the browser on inocube.sk sees a CORS error instead of a 429.
     GatewayResponses:
       DEFAULT_4XX:
         ResponseParameters:
@@ -67,6 +68,8 @@ Resources:
     Properties:
       CodeUri: src/leads/
       Handler: app.lambda_handler
+      # Store (DynamoDB) + owner e-mail with at most 2 SES attempts of up to 5 s each (src/leads/notifier.py).
+      Timeout: 15
       LoggingConfig:
         LogGroup: !Ref LeadsLogGroup
       Environment:
