@@ -34,7 +34,12 @@
       "Resource": [
         "arn:aws:s3:::aws-sam-cli-managed-default-*",
         "arn:aws:s3:::aws-sam-cli-managed-default-*/*"
-      ]
+      ],
+      "Condition": {
+        "StringEquals": {
+          "s3:ResourceAccount": "754895435437"
+        }
+      }
     },
     {
       "Sid": "LambdaFunctions",
@@ -49,7 +54,6 @@
         "iam:DeleteRole",
         "iam:GetRole",
         "iam:UpdateRole",
-        "iam:PassRole",
         "iam:TagRole",
         "iam:UntagRole",
         "iam:DetachRolePolicy",
@@ -59,6 +63,17 @@
         "iam:ListAttachedRolePolicies"
       ],
       "Resource": "arn:aws:iam::754895435437:role/inocube-backend-*"
+    },
+    {
+      "Sid": "PassRolesToLambdaOnly",
+      "Effect": "Allow",
+      "Action": "iam:PassRole",
+      "Resource": "arn:aws:iam::754895435437:role/inocube-backend-*",
+      "Condition": {
+        "StringEquals": {
+          "iam:PassedToService": "lambda.amazonaws.com"
+        }
+      }
     },
     {
       "Sid": "CreateRolesOnlyWithBoundary",
