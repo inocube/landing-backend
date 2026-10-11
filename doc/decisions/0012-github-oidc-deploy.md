@@ -16,5 +16,6 @@ access keys in GitHub would be a standing secret in a public repo.
 - Pull requests run `ci.yml` (ruff, pytest, `sam validate --lint`, `sam build`) without AWS credentials.
 
 ## Consequences
-No stored AWS keys; merge = deploy, so `main` protection and review are the release gate. Prod stays the
-only stack (ADR 0010 still holds); staging and approval gates come later in phase 3.
+No stored AWS keys; merge = deploy, so `main` protection, the required `checks` status and review are the
+release gate. Amends ADR 0010: the pipeline ships without staging; staging and an approval gate are deferred
+to a later phase 3 task, and prod stays the only stack until then.
