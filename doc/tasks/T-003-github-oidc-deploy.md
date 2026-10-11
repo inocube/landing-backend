@@ -1,6 +1,6 @@
 # T-003: Deploy from GitHub Actions with an OIDC role
 
-- Status: ready
+- Status: in-progress
 - Roadmap phase: 3 (pulled forward, prod only)
 - Branch: feat/T-003-github-oidc-deploy
 
