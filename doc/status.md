@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-10-08
+Last updated: 2026-10-11
 
 ## Works today
 
@@ -16,12 +16,15 @@ Last updated: 2026-10-08
 ## In progress
 
 - T-002 align AWS access with ADR 0004 (owner task). Next: phase 2b hardening tasks (see roadmap).
+- T-003 (in review): `ci.yml` checks every PR; `deploy.yml` deploys prod on merge to `main` via GitHub
+  OIDC (ADR 0012). Function roles get the `InocubeLambdaBoundary` boundary. Needs the owner steps in
+  `doc/tasks/T-003-github-oidc-deploy.md` (boundary policy first) before the first merge deploys.
 
 ## Not done yet
 
 - Website form is not connected to the API (the form on the Astro site is disabled).
 - `POST /leads` is public with no throttling, CORS or honeypot (architect finding, phase 2b).
-- No CI/CD, no alarms, no log retention, no custom domain.
+- No staging stack, no alarms, no log retention, no custom domain.
 
 ## Known issues
 

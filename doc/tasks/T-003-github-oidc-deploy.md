@@ -1,6 +1,6 @@
 # T-003: Deploy from GitHub Actions with an OIDC role
 
-- Status: in-progress
+- Status: review
 - Roadmap phase: 3 (pulled forward, prod only)
 - Branch: feat/T-003-github-oidc-deploy
 
@@ -51,10 +51,41 @@ Staging stack, CORS/throttling/honeypot (phase 2b), alarms, custom domain. Do no
 (none)
 
 ## Owner steps
-(implementer)
+Do these before merging: the merge itself triggers the first deploy. AWS console as admin, `eu-central-1`.
+1. **IAM → Policies → `InocubeLambdaBoundary`** must exist (T-002 step 1) and match
+   [`inocube-lambda-boundary.json`](../aws/inocube-lambda-boundary.json) (now with X-Ray): Edit → JSON →
+   paste → Save as new default version. Must exist before any deploy of this template.
+2. **IAM → Identity providers → Add provider → OpenID Connect**, URL `https://token.actions.githubusercontent.com`,
+   audience `sts.amazonaws.com`.
+3. **IAM → Policies → Create policy → JSON**, paste [`inocube-sam-deploy-policy.json`](../aws/inocube-sam-deploy-policy.json),
+   name `InocubeSamDeploy` (customer managed; the T-002 permission set is a separate copy).
+4. **IAM → Roles → Create role → Custom trust policy**, paste
+   [`github-oidc-trust-policy.json`](../aws/github-oidc-trust-policy.json); attach only `InocubeSamDeploy`;
+   name `inocube-github-deploy`. Then role → Edit → Maximum session duration 1 hour. Copy the role ARN.
+5. **GitHub → repo Settings → Environments → New environment** `production`; Deployment branches and tags →
+   Selected branches → add rule `main`.
+6. **GitHub → Settings → Secrets and variables → Actions → Variables → New repository variable**
+   `AWS_DEPLOY_ROLE_ARN` = the role ARN from step 4 (a variable, not a secret: an ARN is not a credential).
+7. Merge the PR, then check **Actions → Deploy**: build, deploy, `GET /health -> 200`. The first deploy adds the
+   boundary to `HealthFunctionRole` and `LeadsFunctionRole`; nothing else should change.
+8. On AccessDenied in the deploy log: add only the named action to the policy JSON (PR) and to the IAM policy.
 
 ## Implementation notes
-(implementer)
+- Branch `feat/T-003-github-oidc-deploy`, cut from `docs/status-after-T-001` (PR #6, holds ADR 0011 and the
+  T-002 policies), not from `main`. Merge PR #6 first. PR opened by the orchestrator.
+- Actions pinned to SHAs verified with `git ls-remote`/clone: checkout v7.0.1, setup-python v7.0.0,
+  configure-aws-credentials v6.3.0, setup-sam v3 (`use-installer: true`, latest SAM CLI). ruff pinned 0.16.8.
+- `allowed-account-ids: 754895435437` makes the job fail if the role ever resolves to another account.
+  OIDC sessions are not tagged by the action, so the trust policy needs no `sts:TagSession`.
+- Smoke test reads `ApiUrl` via `sam list stack-outputs` (only `DescribeStacks`), curl retries 5x.
+- Fixed one pre-existing ruff finding (I001 in `src/health/app.py`) so `ci.yml` passes.
+- Deploy policy audit, unchanged: covers CloudFormation (stack, SAM transform, `aws-sam-cli-managed-default`
+  stack), S3 SAM bucket, `lambda:*` on `inocube-backend-*`, roles only with boundary, API Gateway, the table
+  (no delete) and log groups. X-Ray is runtime-only, so it is in the boundary, not the deploy policy.
+  Untested against AWS: if CloudFormation asks for extra table reads (e.g. `DescribeContributorInsights`)
+  or IAM role actions, apply step 8.
+- Local: `ruff check .` and `pytest` (28 passed) green; actionlint clean; SAM CLI 1.168.0
+  `sam validate --lint` valid and `sam build` OK (x86 host, Python 3.14). CI repeats both on arm64.
 
 ## Architect review
 (architect)
