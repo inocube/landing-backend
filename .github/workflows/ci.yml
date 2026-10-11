@@ -37,6 +37,7 @@ jobs:
 
       - uses: aws-actions/setup-sam@89ddb14d60e682855e3fea4be85b3c56485de310 # v3
         with:
+          version: 1.168.0
           use-installer: true
           token: ${{ github.token }}
 
