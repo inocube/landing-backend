@@ -1,6 +1,6 @@
 # T-004: Harden POST /leads for the public website form
 
-- Status: review
+- Status: approved
 - Roadmap phase: 2b
 - Branch: feat/T-004-leads-hardening
 
@@ -18,8 +18,7 @@ reject, and the owner gets an e-mail for every new lead.
 - Frontend task `inocube/public` T-002 builds the form against the contract below.
 
 ## Scope
-1. **CORS:** allowed origins `https://inocube.sk` and Netlify previews
-   `https://deploy-preview-<n>--inocube-public.netlify.app`. Answer the `OPTIONS` preflight and set
+1. **CORS:** allowed origin exactly `https://inocube.sk` (no `www`, no Netlify previews; owner decision). Answer the `OPTIONS` preflight and set
    `Access-Control-Allow-Origin` (echo only an allowed origin, `Vary: Origin`) on every `/leads` response.
 2. **Honeypot:** a non-empty `website` field → respond `201` with a fake `lead_id`, store nothing, send nothing,
    log `Lead dropped: honeypot`.
@@ -79,7 +78,7 @@ Before merging (the merge deploys prod; DKIM can take hours). AWS console as adm
 - Local: ruff, pytest, SAM CLI 1.168.0 `sam validate --lint` and `sam build` pass. Nothing run against AWS.
 - **CORS in the Lambda** (`src/leads/cors.py`) with an `OPTIONS /leads` route; with a proxy integration the
   Lambda sets the headers on its responses anyway. Allowed origin: exactly `https://inocube.sk` (owner decision
-  after review: apex, no `www`; previews never call the API, so scope item 1's preview pattern was dropped).
+  after review: apex, no `www`; previews never call the API).
   Errors API Gateway makes itself (429, 403, 5xx) get the same header via `GatewayResponses`.
 - **Throttling via `Globals.Api`** so the implicit `ServerlessRestApi` (and its URL) stays. `/*` + `*` limits each
   method separately: POST /leads, OPTIONS /leads, GET /health 5 req/s (burst 10) each.
@@ -97,39 +96,24 @@ Before merging (the merge deploys prod; DKIM can take hours). AWS console as adm
   E-mail failures log lead id + AWS error code only. Not done: duplicate submissions; `ses:FromAddress` condition.
 
 ## Architect review
-Verdict: changes-requested (one small fix; deploy path itself looks clean)
+Verdict: approved (re-review of 43d8485, 4f0e1f9)
 
-Checked: ruff clean, pytest 95 passed, `sam validate --lint` OK. SAM translator diff vs `origin/main`: same logical
-IDs (`ServerlessRestApi`, `ServerlessRestApiProdStage`, roles, `LeadsTable` untouched), so the API id/URL stays;
-changes are in-place updates (RestApi body PUT incl. gateway responses, Stage PATCH for MethodSettings, new
-Deployment, new OPTIONS permission, inline `LeadsFunctionRolePolicy1` via `iam:PutRolePolicy` on a role that
-already has the boundary, so the `iam:PermissionsBoundary` condition holds). Two new log groups match the
-deploy-policy and boundary prefix `/aws/lambda/inocube-backend-*`; the boundary wildcard also covers
-`...:log-stream:*` for CreateLogStream/PutLogEvents. SES role ∩ boundary = domain + recipient identity; X-Ray
-unchanged. Without owner steps 3/4 the worst case is a clean rollback (log groups) or a logged
-`AccessDenied` with 201 (SES), never data loss.
+Checked: ruff clean, pytest 110 passed, `sam validate --lint` OK. SAM translator diff vs `origin/main`: same logical
+IDs, `ServerlessRestApi` and its URL kept, `LeadsTable` untouched; only in-place updates (API body/stage, new
+deployment, OPTIONS permission, inline SES policy on a role that already has the boundary) plus two log groups
+under `/aws/lambda/inocube-backend-*` (deploy policy + boundary prefix match). Without steps 3/4 the worst case is
+a clean rollback or a logged SES `AccessDenied` with 201, never data loss.
 
-Findings
-1. Medium - `src/leads/notifier.py:19`: SES client uses botocore defaults (legacy retries, 5 attempts with
-   exponential backoff, 60 s connect/read timeouts) inside a 10 s Lambda. SES sandbox allows 1 mail/s while the
-   API admits 5+/s, so `TooManyRequests` retries (worst case ~15 s) can time the Lambda out after the lead is
-   stored: client gets 502, retries, duplicate lead. Fix: `Config(connect_timeout=2, read_timeout=3,
-   retries={"mode": "standard", "max_attempts": 2})` and a test that the client is built with it.
-2. Low - `template.yaml:25`, `doc/architecture.md:7,27`, `doc/status.md:22`: `/*` + `*` method settings throttle
-   each method separately (POST /leads, OPTIONS /leads, GET /health: 5 req/s each), not "per stage". Fix the
-   wording (or accept a ~15 req/s total cap knowingly).
-3. Low - `src/leads/models.py:15`: only `Cc` is rejected; U+2028/U+2029 (`Zl`/`Zp`) and bidi/format chars
-   (`Cf`, e.g. U+202E) pass into the owner e-mail and the stored name. Consider rejecting `Cf`/`Zl`/`Zp` in
-   `name` (and `Zl`/`Zp` in `message`); optional.
-4. Info - `src/leads/cors.py:13`: preview origins are allowed although the frontend only sets the API URL in
-   Production, and Netlify builds previews for fork PRs of a public repo. Not a real risk (CORS does not stop
-   server-side posts) but it is unused allowlist surface; keep only if previews will ever call the API.
-5. Info - header injection: subject is the uuid only, From/To fixed, `email` checked for control chars before
-   EmailStr; body is plain text. No PII in logs (tests assert it). Honeypot and SES-failure paths proven by tests.
+First-round findings, all resolved:
+1. SES timeouts/retries (`src/leads/notifier.py:21`): 2 s/3 s, standard mode, `total_max_attempts: 2` (correct:
+   `max_attempts` would allow 3 calls); worst case ~11 s plus store and cold start fits `Timeout: 15`
+   (`template.yaml:72`). Test asserts the config. No deploy-policy change: `lambda:*` covers the update.
+2. Throttling wording now "per method, ~15 req/s total" in template and docs.
+3. `Cf`/`Zl`/`Zp` rejected in all fields; `message` keeps ZWJ/ZWNJ/soft hyphen; tests for both sides.
+4. Origins: exact `https://inocube.sk` only (`src/leads/cors.py:10`), tests cover `www`, case, port, previews.
+5. Reply-To = lead address (structured `ReplyToAddresses`, punycode domain, omitted for non-ASCII local part);
+   no new IAM needed, no header injection, still a manual reply (ADR 0007).
 
-Questions for the owner
-- Is the site served on `https://inocube.sk` (apex) with `www` redirecting? If `www` is primary, the form fails
-  CORS; add it to `ALLOWED_ORIGIN_PATTERNS` and the gateway responses.
-- Set `Reply-To` to the lead's address so you can answer from your mail client? (structured SES field, no
-  injection risk; still a manual reply per ADR 0007.)
-- Order: do steps 1-4 before merge (DKIM can take hours); step 4 is likely needed by the LogGroup handler (untested), 1-3 only for e-mail.
+Remaining (non-blocking): DynamoDB client still has botocore defaults (pre-existing); duplicate submissions and a
+`ses:FromAddress` condition are follow-ups. Owner: do steps 1-4 before merge; step 4 is the only one the deploy
+itself may need (LogGroup handler, untested).
