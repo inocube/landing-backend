@@ -4,7 +4,7 @@
 
 ```
 inocube.sk (Netlify, static)          AWS eu-central-1, stack "inocube-backend" (SAM)
-  contact form  ── (not connected yet) ─▶  API Gateway REST, stage Prod (throttle 5 req/s, burst 10)
+  contact form  ── (not connected yet) ─▶  API Gateway REST, stage Prod (throttle 5 req/s, burst 10, per method)
                                              ├─ GET /health ─▶ Lambda HealthFunction (python3.14, arm64)
                                              └─ POST, OPTIONS /leads ─▶ Lambda LeadsFunction ─▶ DynamoDB "inocube-leads"
                                                                               └─▶ SES e-mail to owner
@@ -24,28 +24,29 @@ GitHub Actions (OIDC role) ─▶ sam deploy: staging on PR merge, prod on relea
 
 | Component | Resource | Notes |
 |---|---|---|
-| API | `ServerlessRestApi` (implicit SAM API), stage `Prod` | Base URL in stack output `ApiUrl`; `Globals.Api`: stage throttling 5 req/s, burst 10; 4XX/5XX gateway responses carry CORS for `https://inocube.sk` |
+| API | `ServerlessRestApi` (implicit SAM API), stage `Prod` | Base URL in stack output `ApiUrl`; `Globals.Api`: throttling 5 req/s, burst 10, for each method separately (~15 req/s total); 4XX/5XX gateway responses carry CORS for `https://inocube.sk` |
 | Health | `HealthFunction`, `src/health/` | `GET /health` → `{"status":"ok"}` |
 | Leads | `LeadsFunction`, `src/leads/` | `POST`/`OPTIONS /leads`; `app.py` (HTTP, honeypot) → `cors.py` → `models.py` (pydantic) → `repository.py` (boto3) → `notifier.py` (SES v2) |
 | Storage | `LeadsTable` = `inocube-leads` | PAY_PER_REQUEST, PK/SK + GSI1 + GSI2 |
 | E-mail | SES identity `inocube.sk` (created by the owner, not in the stack) | From `noreply@inocube.sk` to parameter `NotifyEmail` |
 | Logs | `HealthLogGroup`, `LeadsLogGroup` = `/aws/lambda/inocube-backend-{health,leads}` | 30-day retention, set on the functions via `LoggingConfig` |
-| Tracing | X-Ray active on all functions | via `Globals` (256 MB, 10 s) |
+| Tracing | X-Ray active on all functions | via `Globals` (256 MB, 10 s; LeadsFunction 15 s) |
 
 ## API
 
 | Endpoint | Request | Responses |
 |---|---|---|
 | `GET /health` | none | `200 {"status":"ok", ...}` |
-| `POST /leads` | JSON `name` (1–200), `email` (valid address), `message` (1–5000), `website` (honeypot, leave empty); trimmed, unknown fields ignored; control characters rejected (newline, CR, tab allowed in `message`) | `201 {"lead_id","status"}`, `400 {"error","details":[{"field","message"}]}` (no input echoed), `429 {"error"}` (throttled), `500 {"error"}` |
+| `POST /leads` | JSON `name` (1–200), `email` (valid address), `message` (1–5000), `website` (honeypot, leave empty); trimmed, unknown fields ignored; control, format and line/paragraph-separator characters rejected (`message` allows newline, CR, tab, ZWJ/ZWNJ, soft hyphen) | `201 {"lead_id","status"}`, `400 {"error","details":[{"field","message"}]}` (no input echoed), `429 {"error"}` (throttled), `500 {"error"}` |
 | `OPTIONS /leads` | CORS preflight | `204`, `Access-Control-Allow-*` only for an allowed origin |
 
-- **CORS** is decided in the Lambda (`src/leads/cors.py`): `https://inocube.sk` and
-  `https://deploy-preview-<n>--inocube-public.netlify.app` get their origin echoed in
-  `Access-Control-Allow-Origin`; every response has `Vary: Origin`.
+- **CORS** is decided in the Lambda (`src/leads/cors.py`): only `https://inocube.sk`
+  (apex, no `www`; Netlify previews never call the API) gets `Access-Control-Allow-Origin`; every response
+  has `Vary: Origin`.
 - **Honeypot**: a non-empty `website` returns a fake `201`; nothing is stored or mailed.
-- **Notification**: after a stored lead, one SES e-mail to the owner (subject = lead id). A failed e-mail is
-  logged (lead id + AWS error code) and does not change the `201`.
+- **Notification**: after a stored lead, one SES e-mail to the owner (subject = lead id,
+  Reply-To = the lead's address). SES client: 2 s connect / 3 s read timeout, 2 attempts in total; the function
+  timeout is 15 s. A failed e-mail is logged (lead id + AWS error code) and does not change the `201`.
 - Logs contain lead IDs and outcomes only, never PII.
 
 ## Data model

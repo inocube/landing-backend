@@ -20,7 +20,7 @@ Tasks for the implementer are cut from the current phase into `doc/tasks/`.
 - Unit tests with moto; least-privilege write policy.
 
 ## 2b. Connect the website form
-- CORS restricted to `https://inocube.sk` (+ Netlify deploy previews).
+- CORS restricted to `https://inocube.sk`.
 - Honeypot field and API Gateway throttling against spam.
 - SES notification e-mail to the owner for every lead (verified sender in SES).
 - Frontend form posts to the API and shows success / error states (frontend repo).

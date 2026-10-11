@@ -1,6 +1,6 @@
 # T-004: Harden POST /leads for the public website form
 
-- Status: changes-requested
+- Status: review
 - Roadmap phase: 2b
 - Branch: feat/T-004-leads-hardening
 
@@ -52,7 +52,7 @@ CAPTCHA, AI triage (phase 4), custom domain `api.inocube.sk`, auto-reply to the 
 (none; defaults: sender `noreply@inocube.sk`, recipient `inocube@varga.slmail.me`)
 
 ## Owner steps
-Before merging (the merge deploys prod). AWS console as admin, region `eu-central-1`.
+Before merging (the merge deploys prod; DKIM can take hours). AWS console as admin, `eu-central-1`.
 1. **SES → Identities → Create identity → Domain** `inocube.sk`, Easy DKIM, RSA 2048, no default configuration
    set. At **Websupport → DNS** add the 3 CNAMEs SES shows (`<token>._domainkey` → `<token>.dkim.amazonses.com`;
    host without the `.inocube.sk` suffix). Wait until the identity is *Verified*. Keep existing SPF/MX records.
@@ -76,25 +76,25 @@ Before merging (the merge deploys prod). AWS console as admin, region `eu-centra
    On AccessDenied during deploy: T-003 step 10/11.
 
 ## Implementation notes
-- Branch `feat/T-004-leads-hardening`; PR opened by the orchestrator. Local: ruff clean, pytest green,
-  SAM CLI 1.168.0 `sam validate --lint` and `sam build` pass. Nothing was run against AWS.
-- **CORS in the Lambda** (`src/leads/cors.py`) with an `OPTIONS /leads` route: API Gateway CORS takes only exact
-  origins, not `deploy-preview-<n>--…`. Errors API Gateway makes itself (429, 403, 5xx) get a fixed
-  `https://inocube.sk` header via `GatewayResponses` (previews see a CORS error on those).
-- **Throttling/CORS via `Globals.Api`** so the implicit `ServerlessRestApi` (and its URL) stays; stage update is
-  `apigateway:PATCH`, gateway responses are part of the API body (`PUT`), both already allowed.
+- Local: ruff, pytest, SAM CLI 1.168.0 `sam validate --lint` and `sam build` pass. Nothing run against AWS.
+- **CORS in the Lambda** (`src/leads/cors.py`) with an `OPTIONS /leads` route; with a proxy integration the
+  Lambda sets the headers on its responses anyway. Allowed origin: exactly `https://inocube.sk` (owner decision
+  after review: apex, no `www`; previews never call the API, so scope item 1's preview pattern was dropped).
+  Errors API Gateway makes itself (429, 403, 5xx) get the same header via `GatewayResponses`.
+- **Throttling via `Globals.Api`** so the implicit `ServerlessRestApi` (and its URL) stays. `/*` + `*` limits each
+  method separately: POST /leads, OPTIONS /leads, GET /health 5 req/s (burst 10) each.
 - **Log groups**: new stack-managed `/aws/lambda/inocube-backend-{health,leads}` (30 days) wired via
-  `LoggingConfig.LogGroup`. Reusing the Lambda-created names would fail with AlreadyExists. Names match the
-  deploy policy and the boundary prefix. The CloudFormation LogGroup handler also reads data-protection, index
-  and resource policies, hence the deploy-policy edit (from the cfn-lint resource schema; untested in AWS).
+  `LoggingConfig.LogGroup` (Lambda-created names exist: AlreadyExists). The CloudFormation LogGroup handler also
+  reads data-protection/index/resource policies: deploy-policy edit (from the cfn-lint schema; untested).
 - **SES**: inline `ses:SendEmail` on `identity/inocube.sk` + `identity/<NotifyEmail>` (no SESCrudPolicy). In the
   sandbox SES also authorizes against the recipient identity, so role and boundary allow it. No configuration
-  set is used; adding one (or a default one on the identity) needs its ARN in role and boundary.
-- **Honeypot** is checked before validation (bots learn nothing). **Control characters**: Unicode `Cc` checked
-  before trimming; `message` allows `\n`, `\r` (CRLF) and `\t`. E-mail failures log lead id + AWS error code
-  only (SES messages can contain addresses); no traceback, so the broad `except` has `noqa: BLE001`.
-- Not done (scope): POSTs from foreign origins are still processed (CORS only stops browsers reading the
-  answer); duplicate submissions; `www.inocube.sk` not allowed. Follow-up: `ses:FromAddress` condition.
+  set. Reply-To = the lead's address (punycode domain; omitted for a non-ASCII local part). Client: 2 s connect,
+  3 s read, `total_max_attempts: 2` (botocore's `max_attempts` counts retries, so 2 would mean 3 calls);
+  worst case ~11 s, so `LeadsFunction` timeout is 15 s.
+- **Honeypot** is checked before validation (bots learn nothing). **Characters**: Unicode `Cc`, `Cf`, `Zl`, `Zp`
+  rejected on the raw value in all fields; `message` keeps `\n`, `\r`, `\t`, ZWJ/ZWNJ (emoji sequences, some
+  scripts) and the soft hyphen (pasted text). Zero-width space, BOM and bidi controls are rejected.
+  E-mail failures log lead id + AWS error code only. Not done: duplicate submissions; `ses:FromAddress` condition.
 
 ## Architect review
 Verdict: changes-requested (one small fix; deploy path itself looks clean)

@@ -18,9 +18,9 @@ Last updated: 2026-10-11
 - T-002 align AWS access with ADR 0004 (owner task).
 - T-003 merged (PR #7): `ci.yml` checks every PR; `deploy.yml` deploys prod on merge to `main` via GitHub
   OIDC (ADR 0012). Function roles carry the `InocubeWebLambdaBoundary` boundary.
-- T-004 (in review): `POST /leads` hardened for the website form: CORS for `inocube.sk` and Netlify
-  previews (`OPTIONS /leads`), honeypot `website`, stage throttling 5 req/s (burst 10), control characters
-  rejected, SES e-mail to the owner per stored lead, 256 MB, 30-day log retention. Needs the owner steps in
+- T-004 (in review): `POST /leads` hardened for the website form: CORS for `https://inocube.sk` only
+  (`OPTIONS /leads`), honeypot `website`, throttling 5 req/s (burst 10) per method, control/format characters
+  rejected, SES e-mail to the owner per stored lead (Reply-To = lead), 256 MB, 30-day log retention. Needs the owner steps in
   `doc/tasks/T-004-leads-hardening.md` (SES identities, IAM policy updates) before merge.
 
 ## Not done yet
