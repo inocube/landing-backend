@@ -74,7 +74,7 @@ def test_whitespace_is_stripped_and_unknown_fields_ignored(leads_table):
         "name": "  Jana  ",
         "email": " jana@example.com ",
         "message": "\n Ahoj \t",
-        "website": "spam",
+        "website": "",
         "status": "DONE",
     }
     status, _ = post(lead)
@@ -155,6 +155,72 @@ def test_400_details_never_echo_input(leads_table):
     assert "secret-person" not in raw
     assert "weird-domain" not in raw
     assert "x" * 201 not in raw
+
+
+@pytest.mark.parametrize(
+    ("override", "field"),
+    [
+        ({"name": "Jana\x00"}, "name"),
+        ({"name": "Jana\nNovak"}, "name"),
+        ({"name": "Jana\t"}, "name"),
+        ({"name": "\x1fJana"}, "name"),
+        ({"name": "Jana\x7f"}, "name"),
+        ({"name": "Jana\x85"}, "name"),
+        ({"email": "jana@example.com\r\nBcc: x@example.com"}, "email"),
+        ({"email": "jana\x00@example.com"}, "email"),
+        ({"message": "Ahoj\x00"}, "message"),
+        ({"message": "Ahoj\x1b[31m"}, "message"),
+        ({"message": "Ahoj\x0b"}, "message"),
+    ],
+)
+def test_control_characters_return_400(leads_table, override, field):
+    status, body = post({**VALID_LEAD, **override})
+
+    assert status == 400
+    assert body["details"] == [
+        {"field": field, "message": "must not contain control characters"}
+    ]
+    assert all_items(leads_table) == []
+
+
+def test_message_keeps_newlines_and_tabs(leads_table):
+    message = "Dobry den,\r\nmam zaujem:\n\t- web\n\t- e-shop"
+    status, _ = post({**VALID_LEAD, "message": message})
+
+    assert status == 201
+    (item,) = all_items(leads_table)
+    assert item["message"] == message
+
+
+@pytest.mark.parametrize("website", ["http://spam.example", "  x ", 1, ["a"], True])
+def test_honeypot_returns_fake_201_and_stores_nothing(
+    leads_table, outbox, caplog, website
+):
+    caplog.set_level(logging.INFO)
+    status, body = post({**VALID_LEAD, "website": website})
+
+    assert status == 201
+    assert body["status"] == "NEW"
+    assert re.fullmatch(r"[0-9a-f-]{36}", body["lead_id"])
+    assert all_items(leads_table) == []
+    assert outbox == []
+    assert "Lead dropped: honeypot" in caplog.text
+
+
+def test_honeypot_hit_skips_validation(leads_table):
+    # A bot never learns the validation rules: even invalid input gets the fake success.
+    status, _ = post({"website": "spam", "email": "not-an-email"})
+
+    assert status == 201
+    assert all_items(leads_table) == []
+
+
+@pytest.mark.parametrize("website", ["", "   ", None, False, 0])
+def test_empty_honeypot_is_a_normal_lead(leads_table, website):
+    status, _ = post({**VALID_LEAD, "website": website})
+
+    assert status == 201
+    assert len(all_items(leads_table)) == 1
 
 
 def test_storage_failure_returns_500(mocked_aws):
