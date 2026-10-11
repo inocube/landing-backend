@@ -1,6 +1,6 @@
 # T-003: Deploy from GitHub Actions with an OIDC role
 
-- Status: review
+- Status: approved
 - Roadmap phase: 3 (pulled forward, prod only)
 - Branch: feat/T-003-github-oidc-deploy
 
@@ -94,27 +94,18 @@ Do all of these before merging: the merge itself triggers a deploy. AWS console 
 - Follow-ups: exact pins in `src/*/requirements.txt`; narrower `apigateway`; `xray:GetSampling*` if needed.
 
 ## Architect review
-Verdict: changes-requested (re-review of d3e5e9b, a6f7861, ea72a1e; one doc regression left)
+Verdict: approved (final, after d3e5e9b, a6f7861, ea72a1e, 1122385)
 
-Re-checked: ruff clean, `pytest` 28 passed, `sam validate --lint` valid, actionlint clean, policy JSON parses.
-First review: 1 (environment before role, pre-merge check), 2 (rollback recovery step), 3 (SAM CLI 1.168.0
-pinned in both workflows), 4 (required `checks` step and ruff + pytest rerun in `deploy.yml` before credentials)
-and 7 (ADR 0012 amends 0010) are resolved. Finding 6: `iam:PassedToService` is a valid key for `iam:PassRole`,
-and CloudFormation's Lambda create/update passes the role to `lambda.amazonaws.com`, so deploys still work.
-`s3:ResourceAccount` is valid for all S3 actions and matches the existing SAM bucket. Requirements pins,
-`apigateway` and `xray:GetSampling*` are follow-ups, as the coordinator decided.
-
-1. High, `doc/tasks/T-003-github-oidc-deploy.md:33-34`: ea72a1e cut this file apart. Scope item 7 now ends
-   mid-sentence ("under `## Owner steps"), scope item 8 is gone, and the `## Acceptance criteria`,
-   `## Out of scope`, `## Open questions` and `## Owner steps` headings are deleted. The owner steps now sit
-   inside Scope. Fix: restore those sections from 88aa8f3 and keep the new 11 owner steps under `## Owner steps`.
-2. Medium, same file: the commit says finding 5 is recorded in Open questions as an accepted risk pending the
-   owner, but that section no longer exists. Restore it with that entry.
-3. Low, `:76`: "apply step 8" should now say "apply step 11".
-No IAM or workflow regressions found.
-
-Questions for the owner
-- Finding 5 (a stolen deploy session can create a bounded role that another AWS account can assume and that
-  outlives the session): accept it, or harden the boundary? Want a required reviewer on `production` until
-  staging exists?
-- `inocube` is a user account, so a rename frees the name used in `sub`. Pin `sub` to `repository_id` later?
+- Checked: ruff clean, `pytest` 28 passed, SAM CLI 1.168.0 `sam validate --lint` valid, actionlint clean, the 4
+  action SHAs match their tags. No AWS command was run; the IAM points are reasoned, not tested.
+- First-review findings resolved:
+  - Environment created before the role, with a pre-merge check.
+  - Recovery step for a first-deploy rollback (`continue-update-rollback`).
+  - SAM CLI pinned; `checks` is a required status check, and `deploy.yml` reruns ruff and pytest before deploying.
+  - `iam:PassedToService` and `s3:ResourceAccount` are valid keys for their actions; ADR 0012 amends ADR 0010.
+- The task file is restored: lines 1-49 match 88aa8f3, `## Owner steps` holds the 11 steps, Open questions
+  records finding 5, and the notes point to step 11.
+- Remaining risk (accepted, pending owner): finding 5, a stolen deploy session can create a bounded role
+  that another AWS account can assume, see Open questions. Follow-ups: exact pins in `src/*/requirements.txt`,
+  narrower `apigateway`.
+- Before merging: PR #6 first, then owner steps 1-8 in order. The merge itself deploys prod.
