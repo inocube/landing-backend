@@ -7,9 +7,9 @@ Tasks for the implementer are cut from the current phase into `doc/tasks/`.
 |---|---|---|
 | 0 | Skeleton: SSO, SAM, health Lambda, branch protection | done |
 | 1 | DynamoDB table and key design | done |
-| 2 | Leads API: POST /leads | next (T-001) |
+| 2 | Leads API: POST /leads | done |
 | 2b | Connect the website form | planned |
-| 3 | CI/CD with GitHub Actions + OIDC, staging + prod | planned |
+| 3 | CI/CD with GitHub Actions + OIDC, staging + prod | in progress (prod deploy pulled forward, T-003) |
 | 4 | AI lead triage with Bedrock | planned |
 | 5 | Production hardening, `api.inocube.sk` | planned |
 | 6 | AI assistant on the website (RAG) | idea |
@@ -29,6 +29,8 @@ Tasks for the implementer are cut from the current phase into `doc/tasks/`.
 - GitHub Actions: on PR run lint, tests, `sam validate`, `sam build`.
 - On merge to `main`: deploy to staging; prod deploy on manual approval or tag.
 - AWS access via GitHub OIDC role with a narrow trust policy (repo + branch). No secrets in GitHub.
+- Done early (T-003, ADR 0012): PR checks and prod deploy on merge to `main`. Still open: staging stack and
+  a manual approval or tag gate for prod.
 
 ## 4. AI lead triage
 - Asynchronous (DynamoDB Stream or SQS) so the form response never waits for the model.

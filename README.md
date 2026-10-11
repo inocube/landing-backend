@@ -15,8 +15,9 @@ IAM Identity Center (SSO) · region `eu-central-1`.
 | Path | What it is |
 |---|---|
 | `template.yaml` | The whole AWS stack (SAM). Single source of truth for infrastructure. |
-| `samconfig.toml` | SAM deploy settings (stack name, region, profile). No secrets. |
+| `samconfig.toml` | SAM deploy settings (stack name, region). No profile, no secrets. |
 | `src/<function>/` | One folder per Lambda: `app.py` handler + its `requirements.txt`. |
+| `.github/workflows/` | CI on pull requests (`ci.yml`), deploy on merge to `main` (`deploy.yml`). |
 | `tests/unit/` | pytest unit tests (AWS mocked with moto). |
 | `local-test/` | JSON fixtures for manual DynamoDB Local / CLI testing. |
 | `doc/` | Goals, architecture, status, roadmap, decisions, agent tasks. Start at [`doc/README.md`](doc/README.md). |
@@ -48,13 +49,20 @@ pip install -r requirements-dev.txt
 pytest
 ```
 
-## Deploy (manual until CI/CD exists)
+## Deploy
+
+Every merge to `main` deploys the `inocube-backend` stack from GitHub Actions
+([`deploy.yml`](.github/workflows/deploy.yml)) with a short-lived OIDC role, then checks `GET /health`.
+No AWS keys are stored in GitHub ([ADR 0012](doc/decisions/0012-github-oidc-deploy.md)). Pull requests run
+lint, tests, `sam validate --lint` and `sam build` ([`ci.yml`](.github/workflows/ci.yml)).
+
+Manual fallback (owner only, profile passed explicitly because `samconfig.toml` has none):
 
 ```powershell
-aws sso login --profile inocube
-sam validate
+aws sso login --profile inocube-deploy
+sam validate --lint
 sam build --use-container
-sam deploy --profile inocube-deploy      # permission set that may create IAM roles
+sam deploy --profile inocube-deploy
 ```
 
 `main` is protected: every change goes through a pull request.

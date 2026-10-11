@@ -1,0 +1,72 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Never run two deploys at once; queue the next one instead of cancelling a running CloudFormation update.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 30
+    # The environment pins the OIDC subject to repo:inocube/landing-backend:environment:production,
+    # and its branch rule limits it to main.
+    environment: production
+    permissions:
+      id-token: write # request the GitHub OIDC token that AWS STS exchanges for role credentials
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.14"
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+
+      # Re-run the PR checks so a deploy never ships untested code, even without a required status check.
+      - name: Install dev dependencies
+        run: pip install -r requirements-dev.txt ruff==0.16.8
+
+      - name: Lint
+        run: ruff check .
+
+      - name: Unit tests
+        run: pytest
+
+      - uses: aws-actions/setup-sam@89ddb14d60e682855e3fea4be85b3c56485de310 # v3
+        with:
+          version: 1.168.0
+          use-installer: true
+          token: ${{ github.token }}
+
+      - name: Build
+        run: sam build
+
+      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          role-session-name: github-deploy-${{ github.run_id }}
+          aws-region: eu-central-1
+          allowed-account-ids: "754895435437"
+
+      - name: Deploy
+        run: sam deploy --no-confirm-changeset --no-fail-on-empty-changeset --no-progressbar
+
+      - name: Smoke test GET /health
+        run: |
+          api_url=$(sam list stack-outputs --stack-name inocube-backend --output json \
+            | python3 -c 'import json,sys; print(next(o["OutputValue"] for o in json.load(sys.stdin) if o["OutputKey"] == "ApiUrl"))')
+          status=$(curl -sS -o /dev/null -w '%{http_code}' --retry 5 --retry-all-errors --retry-delay 3 "${api_url}health")
+          echo "GET ${api_url}health -> ${status}"
+          test "$status" = "200"

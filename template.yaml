@@ -9,6 +9,8 @@ Globals:
     Runtime: python3.14
     Architectures: [arm64] # Graviton - lacnejsi a rychlejsi
     Tracing: Active # X-Ray tracing hned od zaciatku
+    # Ceiling for every role SAM generates; the deploy role may create roles only with it (ADR 0011).
+    PermissionsBoundary: !Sub arn:aws:iam::${AWS::AccountId}:policy/InocubeWebLambdaBoundary
 
 Resources:
   HealthFunction:
@@ -44,6 +46,9 @@ Resources:
             Method: post
   LeadsTable:
     Type: AWS::DynamoDB::Table
+    # Keep the table and its leads even if the stack is deleted or a change would replace the table.
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       TableName: inocube-leads
       BillingMode: PAY_PER_REQUEST # on-demand: platíš za requesty, nie za rezervovanú kapacitu

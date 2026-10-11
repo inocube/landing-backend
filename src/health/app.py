@@ -1,5 +1,6 @@
 import json
- 
+
+
 def lambda_handler(event, context):
     """Health-check endpoint. Zatial ziadna logika."""
     return {
