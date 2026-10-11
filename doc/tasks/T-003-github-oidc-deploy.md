@@ -1,6 +1,6 @@
 # T-003: Deploy from GitHub Actions with an OIDC role
 
-- Status: review
+- Status: changes-requested
 - Roadmap phase: 3 (pulled forward, prod only)
 - Branch: feat/T-003-github-oidc-deploy
 
@@ -88,4 +88,38 @@ Do these before merging: the merge itself triggers the first deploy. AWS console
   `sam validate --lint` valid and `sam build` OK (x86 host, Python 3.14). CI repeats both on arm64.
 
 ## Architect review
-(architect)
+Verdict: changes-requested
+
+Checked: `ruff check .` clean, `pytest` 28 passed, SAM CLI 1.168.0 `sam validate --lint` valid and `sam build` OK,
+actionlint clean, all 4 action SHAs match their tags (`git ls-remote`). SAM transform checked offline: both roles
+get the boundary; Leads role = PutItem/UpdateItem/BatchWriteItem, so boundary ∩ role = PutItem/UpdateItem, enough
+for the conditional `put_item`; logs and X-Ray writes fit. `sub` format is right for an `environment:` job; no
+`pull_request_target`, no untrusted input in `run:`. No AWS command was run; IAM behaviour below is reasoned, not tested.
+
+1. High, `T-003…md:62-66` (owner step order): role (step 4) is created before environment (step 5). In that window,
+   or if the PR is merged early, any workflow with write access (agents push branches) that names
+   `environment: production` auto-creates the environment unprotected and gets a token with the trusted `sub`.
+   Fix: create the environment + `main` rule first, then the role; verify the rule exists before step 7.
+2. High, `doc/aws/inocube-sam-deploy-policy.json:83` + `template.yaml:13`: the first deploy adds boundaries to
+   existing roles. If any later resource in that changeset fails, the rollback must remove them
+   (`iam:DeleteRolePermissionsBoundary`), which is explicitly denied (also in the SSO copy) -> stack
+   `UPDATE_ROLLBACK_FAILED`. Fix: owner step for the first run: on failure, as admin
+   `continue-update-rollback --resources-to-skip HealthFunctionRole LeadsFunctionRole`, or run that one deploy as admin.
+3. Medium, `.github/workflows/deploy.yml:36-39` (and ci.yml:39): `setup-sam` with no `version:` installs the latest
+   SAM CLI, unpinned, into the job that holds prod credentials. Pin `version: 1.168.0`.
+4. Medium, owner steps: merge = deploy, but `ci.yml` is not a required check (ruleset has only PR + label) and
+   `deploy.yml` reruns no tests. Add step: ruleset -> require status check `checks`.
+5. Medium, `inocube-sam-deploy-policy.json:64-78`: `CreateRole` + `AttachRolePolicy` are bounded but the trust
+   policy is free, so a stolen deploy session can leave a role `inocube-backend-x` trusted by a foreign account
+   that outlives the 1 h session and can Query/GetItem leads (PII), read `/inocube/*` and send mail as inocube.sk.
+   Accept explicitly, or add a boundary Deny when `lambda:SourceFunctionArn` is Null (test first).
+6. Low: `PassRole` lacks `iam:PassedToService: lambda.amazonaws.com` (`:52`); `s3:*` on
+   `aws-sam-cli-managed-default-*` also matches buckets in other accounts, add `s3:ResourceAccount` (`:33-37`);
+   `apigateway` on all `/restapis/*` (`:108-110`). `src/*/requirements.txt` ranges resolve at deploy time, so prod
+   may run versions CI never tested; pin exact versions. Boundary lacks `xray:GetSampling*` (harmless in Lambda).
+7. Low, `doc/decisions/0012…md:20`: ADR 0010 says staging comes with the pipeline; say 0012 amends 0010.
+
+Questions for the owner
+- Accept finding 5 or harden the boundary now? Want a required reviewer on `production` until staging exists?
+- `inocube` is a user account; a rename frees the name for `sub`. Pin `sub` to `repository_id` via a custom
+  OIDC subject template later?
