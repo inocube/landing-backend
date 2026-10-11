@@ -87,7 +87,7 @@
       "Resource": "arn:aws:iam::754895435437:role/inocube-backend-*",
       "Condition": {
         "StringEquals": {
-          "iam:PermissionsBoundary": "arn:aws:iam::754895435437:policy/InocubeLambdaBoundary"
+          "iam:PermissionsBoundary": "arn:aws:iam::754895435437:policy/InocubeWebLambdaBoundary"
         }
       }
     },

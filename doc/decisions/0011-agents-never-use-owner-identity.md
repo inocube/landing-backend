@@ -12,8 +12,8 @@ agents to use only a restricted technical identity and never act under his accou
 - Agents never run `aws sso login` for the owner, never use profiles `inocube` / `inocube-deploy`, and never
   ask the owner for sign-in codes.
 - Agents hold no AWS identity at all: they change code and open PRs. Only the GitHub Actions OIDC role
-  (ADR 0012) deploys, and it gets only `InocubeSamDeploy`.
-- `InocubeSamDeploy` may create IAM roles only with the permissions boundary `InocubeLambdaBoundary`
+  (ADR 0012) deploys, and it gets only `InocubeWebSamDeploy`.
+- `InocubeWebSamDeploy` may create IAM roles only with the permissions boundary `InocubeWebLambdaBoundary`
   attached, so no role it creates can exceed that boundary (no IAM, no access outside this project).
 - Granting or changing access (Identity Center, IAM users, boundaries) stays with the owner.
 

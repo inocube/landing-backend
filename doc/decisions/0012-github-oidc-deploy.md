@@ -10,7 +10,7 @@ access keys in GitHub would be a standing secret in a public repo.
 ## Decision
 - Every push to `main` runs `.github/workflows/deploy.yml`: `sam build` on a native arm64 runner, then
   `sam deploy` of the `inocube-backend` (prod) stack and a `GET /health` smoke test.
-- AWS access comes from the GitHub OIDC provider: role `inocube-github-deploy` with only `InocubeSamDeploy`,
+- AWS access comes from the GitHub OIDC provider: role `inocube-web-github-deploy` with only `InocubeWebSamDeploy`,
   1 h sessions, trusted only for `sub` = `repo:inocube/landing-backend:environment:production`.
 - The GitHub environment `production` accepts only branch `main`. The role ARN is a repo variable, not a secret.
 - Pull requests run `ci.yml` (ruff, pytest, `sam validate --lint`, `sam build`) without AWS credentials.

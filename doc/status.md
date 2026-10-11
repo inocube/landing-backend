@@ -17,7 +17,7 @@ Last updated: 2026-10-11
 
 - T-002 align AWS access with ADR 0004 (owner task). Next: phase 2b hardening tasks (see roadmap).
 - T-003 (in review): `ci.yml` checks every PR; `deploy.yml` deploys prod on merge to `main` via GitHub
-  OIDC (ADR 0012). Function roles get the `InocubeLambdaBoundary` boundary. Needs the owner steps in
+  OIDC (ADR 0012). Function roles get the `InocubeWebLambdaBoundary` boundary. Needs the owner steps in
   `doc/tasks/T-003-github-oidc-deploy.md` (boundary policy first) before the first merge deploys.
 
 ## Not done yet
@@ -29,6 +29,6 @@ Last updated: 2026-10-11
 ## Known issues
 
 - AWS access differs from ADR 0004: the SSO user has only `InocubeDevAccess`, which can create
-  IAM roles. `InocubeSamDeploy` and the `inocube-deploy` profile do not exist; the T-001 deploy ran
+  IAM roles. `InocubeWebSamDeploy` and the `inocube-deploy` profile do not exist; the T-001 deploy ran
   with `inocube`. Owner decided to align AWS with the ADR: `doc/tasks/T-002-aws-access-alignment.md`.
 - Commit `17193d5 "test direct push"` is in `main` history (from testing branch protection). Harmless.

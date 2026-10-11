@@ -10,7 +10,7 @@ so no agent and no laptop needs AWS write credentials (owner decision 2026-10-09
 
 ## Context
 - ADR 0004 (SSO), 0010 (single prod until CI/CD), 0011 (agents never use the owner's identity).
-- `doc/aws/inocube-sam-deploy-policy.json` (deploy rights) and `doc/aws/inocube-lambda-boundary.json`
+- `doc/aws/inocube-web-sam-deploy-policy.json` (deploy rights) and `doc/aws/inocube-web-lambda-boundary.json`
   (ceiling for every role the stack creates) exist from T-002. Owner creates AWS resources by hand once;
   the repo holds the JSON and the steps.
 - Repo is public: GitHub-hosted `ubuntu-24.04-arm` runners are free and build arm64 natively.
@@ -25,13 +25,13 @@ so no agent and no laptop needs AWS write credentials (owner decision 2026-10-09
    `sam deploy --no-confirm-changeset --no-fail-on-empty-changeset`, then a smoke test `GET /health` == 200.
    Pin actions to full commit SHAs. `concurrency` so two deploys never overlap.
 3. `template.yaml`: `Globals.Function.PermissionsBoundary:
-   !Sub arn:aws:iam::${AWS::AccountId}:policy/InocubeLambdaBoundary`.
-4. `doc/aws/inocube-lambda-boundary.json`: add `xray:PutTraceSegments`, `xray:PutTelemetryRecords`.
+   !Sub arn:aws:iam::${AWS::AccountId}:policy/InocubeWebLambdaBoundary`.
+4. `doc/aws/inocube-web-lambda-boundary.json`: add `xray:PutTraceSegments`, `xray:PutTelemetryRecords`.
 5. `samconfig.toml`: remove `profile`; README deploy section passes `--profile` explicitly.
 6. `doc/aws/github-oidc-trust-policy.json`: trust `token.actions.githubusercontent.com`, `aud`
    `sts.amazonaws.com`, `sub` exactly `repo:inocube/landing-backend:environment:production`.
 7. Owner steps (in this task file under `## Owner steps`): create the GitHub OIDC identity provider, role
-   `inocube-github-deploy` (trust policy from 6, managed policy from the deploy JSON, max session 1 h),
+   `inocube-web-github-deploy` (trust policy from 6, managed policy from the deploy JSON, max session 1 h),
    GitHub environment `production` limited to branch `main`, repo variable `AWS_DEPLOY_ROLE_ARN`.
 8. ADR 0012 (GitHub OIDC deploy, prod on merge); update `doc/architecture.md`, `doc/roadmap.md`,
    `doc/status.md`, README.
@@ -48,7 +48,7 @@ so no agent and no laptop needs AWS write credentials (owner decision 2026-10-09
 Staging stack, CORS/throttling/honeypot (phase 2b), alarms, custom domain. Do not create AWS resources.
 
 ## Open questions
-- Accepted risk, pending owner (architect finding 5): `InocubeSamDeploy` can create `inocube-backend-*` roles
+- Accepted risk, pending owner (architect finding 5): `InocubeWebSamDeploy` can create `inocube-backend-*` roles
   with any trust policy (only the boundary is enforced). A stolen 1 h deploy session could leave a role that a
   foreign account can assume after the session ends and that, within the boundary, reads leads (PII), reads
   `/inocube/*` and sends mail as inocube.sk. Mitigation (test first): a boundary `Deny` on all actions when
@@ -61,20 +61,21 @@ Do all of these before merging: the merge itself triggers a deploy. AWS console 
 1. **GitHub → repo Settings → Environments → New environment** `production`; Deployment branches and tags →
    Selected branches → add rule `main`. Do this first: before it exists, any workflow naming `production`
    would auto-create it unprotected and get a token the role trusts.
-2. **IAM → Policies → `InocubeLambdaBoundary`** must exist (T-002 step 1) and match
-   [`inocube-lambda-boundary.json`](../aws/inocube-lambda-boundary.json) (now with X-Ray): Edit → JSON →
+2. **IAM → Policies → `InocubeWebLambdaBoundary`** must exist (T-002 step 1) and match
+   [`inocube-web-lambda-boundary.json`](../aws/inocube-web-lambda-boundary.json) (now with X-Ray): Edit → JSON →
    paste → Save as new default version. Must exist before any deploy of this template.
+   A role takes only one boundary: this policy must hold the whole JSON (table, logs, X-Ray, SSM, SES).
 3. **IAM → Identity providers → Add provider → OpenID Connect**, URL `https://token.actions.githubusercontent.com`,
    audience `sts.amazonaws.com`.
-4. **IAM → Policies → Create policy → JSON**, paste [`inocube-sam-deploy-policy.json`](../aws/inocube-sam-deploy-policy.json),
-   name `InocubeSamDeploy` (customer managed; also update the T-002 permission set copy to the same JSON).
+4. **IAM → Policies → Create policy → JSON**, paste [`inocube-web-sam-deploy-policy.json`](../aws/inocube-web-sam-deploy-policy.json),
+   name `InocubeWebSamDeploy` (customer managed; also update the T-002 permission set copy to the same JSON).
 5. **IAM → Roles → Create role → Custom trust policy**, paste
-   [`github-oidc-trust-policy.json`](../aws/github-oidc-trust-policy.json); attach only `InocubeSamDeploy`;
-   name `inocube-github-deploy`. Then role → Edit → Maximum session duration 1 hour. Copy the role ARN.
+   [`github-oidc-trust-policy.json`](../aws/github-oidc-trust-policy.json); attach only `InocubeWebSamDeploy`;
+   name `inocube-web-github-deploy`. Then role → Edit → Maximum session duration 1 hour. Copy the role ARN.
 6. **GitHub → Settings → Secrets and variables → Actions → Variables → New repository variable**
    `AWS_DEPLOY_ROLE_ARN` = the role ARN from step 5 (a variable, not a secret: an ARN is not a credential).
-7. **GitHub → Settings → Rules → Rulesets → the `main` ruleset → Require status checks to pass** → add `checks`
-   (the `ci.yml` job; it appears after one CI run on the PR).
+7. **GitHub → Settings → Rules → Rulesets → `main-protection`** (the ruleset that targets `main`) → enable
+   **Require status checks to pass** → Add checks → `checks` (the `ci.yml` job; it appears after one CI run).
 8. **Check before merging:** Settings → Environments → `production` shows the branch rule `main`, and the
    ruleset lists `checks`. If either is missing, do not merge.
 9. Merge the PR and watch **Actions → Deploy** right away (or start it via **Run workflow**
