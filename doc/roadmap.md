@@ -8,7 +8,7 @@ Tasks for the implementer are cut from the current phase into `doc/tasks/`.
 | 0 | Skeleton: SSO, SAM, health Lambda, branch protection | done |
 | 1 | DynamoDB table and key design | done |
 | 2 | Leads API: POST /leads | done |
-| 2b | Connect the website form | planned |
+| 2b | Connect the website form | in progress (backend T-004, frontend `inocube/public` T-002) |
 | 3 | CI/CD with GitHub Actions + OIDC, staging + prod | in progress (prod deploy pulled forward, T-003) |
 | 4 | AI lead triage with Bedrock | planned |
 | 5 | Production hardening, `api.inocube.sk` | planned |
@@ -20,7 +20,7 @@ Tasks for the implementer are cut from the current phase into `doc/tasks/`.
 - Unit tests with moto; least-privilege write policy.
 
 ## 2b. Connect the website form
-- CORS restricted to `https://inocube.sk` (+ Netlify preview origin for staging).
+- CORS restricted to `https://inocube.sk` (+ Netlify deploy previews).
 - Honeypot field and API Gateway throttling against spam.
 - SES notification e-mail to the owner for every lead (verified sender in SES).
 - Frontend form posts to the API and shows success / error states (frontend repo).
@@ -41,7 +41,7 @@ Tasks for the implementer are cut from the current phase into `doc/tasks/`.
 ## 5. Hardening
 - Custom domain `api.inocube.sk` (ACM certificate, DNS at Websupport).
 - CloudWatch alarms (5xx, Lambda errors, throttles), AWS Budget alert.
-- IAM review, log retention, data retention policy for leads (GDPR).
+- IAM review, data retention policy for leads (GDPR). SES production access (leave the sandbox).
 
 ## 6. AI assistant on the website
 - RAG over public website content (services, case studies), Bedrock Knowledge Bases or equivalent.
