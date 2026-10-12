@@ -1,6 +1,6 @@
 # T-005: Guard alarms and budget
 
-- Status: review
+- Status: approved
 - Roadmap phase: 5 (pulled forward: monitoring part only)
 - Branch: feat/T-005-guard-alarms
 - Requested: owner, 2026-10-12 („priprav strážne alarmy na backende“)
@@ -118,4 +118,34 @@ After merge:
 - Unverified until deploy: exact CloudFormation call set for the legacy Budget resource; first alarm states.
 
 ## Architect review
-(architect: verdict approved / changes-requested, findings with file:line)
+Verdict: approved (reviewed 9cdeca5)
+
+Checked locally: `pytest` 111 passed, `ruff check` clean, `sam validate --lint` valid. Nothing run against AWS.
+Verified: Lambda `FunctionName` via `!Ref` (function name), REST `ApiName` = OpenAPI title = stack name +
+`Stage` Prod, DynamoDB `SystemErrors`/`ThrottledRequests` with `TableName`+`Operation`, quoted-phrase filter
+pattern matches both `notifier.py` branches (same text), Budgets `NotificationsWithSubscribers` = Replacement
+(CFN docs), SNS subscription actions authorize on the topic ARN (service reference). Policy additions only,
+ARN-scoped, no IAM/PassRole, no `*`; 4744 of 6144 chars. No existing resource is modified or replaced;
+`sam deploy` passes no stack tags, so no budget tag actions needed. All acceptance criteria met.
+
+Findings (none blocking):
+1. Low, `template.yaml:435`/`:441`: changing `AlarmEmail` or the percentages replaces the budget; with the same
+   `BudgetName` the create-first replacement fails (duplicate name) and the deploy rolls back. Documented in
+   owner step 6 and the parameter text; acceptable. Fix only if it bites: put a suffix (e.g. `-v2`) in the name.
+2. Low, `template.yaml:317`, `:340`, `:401`, `:414`: alarms depend on implicit names (ApiName = stack name,
+   `Operation=PutItem`). If a later task adds an explicit API/custom domain or another DynamoDB operation, the
+   alarm silently stays OK on a metric that no longer exists. Expected: the task that changes these updates
+   the alarms (worth one line under Monitoring in `doc/architecture.md`).
+3. Low, owner step 4: new alarms go INSUFFICIENT_DATA → OK and fire `OKActions`; mails are dropped while the
+   subscription is pending, but a re-created alarm later sends an unexpected "OK" mail. Say "OK mails right
+   after a deploy are normal" in step 4.
+4. Info, `template.yaml:242`: "so the sum always exists" is not guaranteed when both series have no data
+   (expression can return nothing); harmless because `notBreaching` covers it. Reword when touched.
+5. Info: storage failures are caught in `app.py` and return 500, so `leads-errors` does not fire for them;
+   only `api-5xx` does. Correct, but the owner should not expect both mails.
+
+Questions for the owner
+- Is the account's current monthly spend clearly under 5 USD (Route 53, SES, other projects)? Otherwise the
+  80 % ACTUAL mail arrives right after deploy; set `MonthlyBudgetUsd` accordingly.
+- If the first deploy rolls back after the SNS subscription was created, a confirmation mail for a deleted
+  subscription may arrive: ignore it and confirm only the mail that arrives after the green deploy.
