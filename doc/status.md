@@ -23,11 +23,14 @@ Last updated: 2026-10-12
 
 ## In progress
 
-- Nothing. Next phase: owner to choose (roadmap).
+- T-005 guard alarms (PR `feat/T-005-guard-alarms`, in review): 8 CloudWatch alarms (Lambda errors,
+  throttles, duration; API 5xx and traffic spike; DynamoDB errors; failed lead e-mail via a log metric
+  filter) e-mailed through SNS topic `inocube-backend-alarms` on ALARM and OK, plus an account-wide 5 USD
+  monthly budget. Owner must update `InocubeWebSamDeploy` before merge and confirm the SNS mail after.
 
 ## Not done yet
 
-- No staging stack, no alarms, no custom domain. No CAPTCHA or duplicate-submission check.
+- No staging stack, no custom domain. Alarms not deployed yet (T-005). No CAPTCHA or duplicate-submission check.
 - SES account in the sandbox: notification goes only to verified recipients.
 
 ## Known issues

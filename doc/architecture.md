@@ -31,6 +31,7 @@ GitHub Actions (OIDC role) ─▶ sam deploy: staging on PR merge, prod on relea
 | E-mail | SES identity `inocube.sk` (created by the owner, not in the stack) | From `noreply@inocube.sk` to parameter `NotifyEmail` |
 | Logs | `HealthLogGroup`, `LeadsLogGroup` = `/aws/lambda/inocube-backend-{health,leads}` | 30-day retention, set on the functions via `LoggingConfig` |
 | Tracing | X-Ray active on all functions | via `Globals` (256 MB, 10 s; LeadsFunction 15 s) |
+| Monitoring | 8 `AWS::CloudWatch::Alarm` `inocube-backend-*`, SNS `AlarmTopic`, metric filter, `MonthlyBudget` | See Monitoring below (T-005) |
 
 ## API
 
@@ -48,6 +49,25 @@ GitHub Actions (OIDC role) ─▶ sam deploy: staging on PR merge, prod on relea
   Reply-To = the lead's address). SES client: 2 s connect / 3 s read timeout, 2 attempts in total; the function
   timeout is 15 s. A failed e-mail is logged (lead id + AWS error code) and does not change the `201`.
 - Logs contain lead IDs and outcomes only, never PII.
+
+## Monitoring
+
+All alarms: 5-minute period, 1 evaluation period, `TreatMissingData: notBreaching`, SNS topic
+`inocube-backend-alarms` (e-mail subscription to parameter `AlarmEmail`) on ALARM and OK. Each alarm's
+`AlarmDescription` says what to check first.
+
+| Alarm | Metric | Fires when |
+|---|---|---|
+| `leads-errors`, `health-errors` | `AWS/Lambda Errors` per function | Sum ≥ 1 |
+| `lambda-throttles` | `AWS/Lambda Throttles`, both functions (metric math) | Sum ≥ 1 |
+| `leads-duration` | `AWS/Lambda Duration` of LeadsFunction | Maximum ≥ 12 000 ms (timeout 15 s) |
+| `api-5xx` | `AWS/ApiGateway 5XXError`, `ApiName` = stack name, `Stage` = Prod | Sum ≥ 1 |
+| `api-traffic-spike` | `AWS/ApiGateway Count` | Sum > `ApiRequestsAlarmThreshold` (300) |
+| `leads-notification-failed` | `Inocube/Backend LeadNotificationFailed` from a metric filter on `LeadsLogGroup` (`"Lead notification failed"`) | Sum ≥ 1 |
+| `dynamodb-errors` | `AWS/DynamoDB SystemErrors` + `ThrottledRequests`, `Operation` = PutItem (metric math) | Sum ≥ 1 |
+
+Budget `inocube-backend-monthly`: account-wide COST, `MonthlyBudgetUsd` (5 USD); e-mail to `AlarmEmail` at
+ACTUAL > 80 % and FORECASTED > 100 %. Budgets data lags by hours.
 
 ## Data model
 
