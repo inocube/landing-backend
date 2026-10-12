@@ -1,6 +1,6 @@
 # T-005: Guard alarms and budget
 
-- Status: ready
+- Status: review
 - Roadmap phase: 5 (pulled forward: monitoring part only)
 - Branch: feat/T-005-guard-alarms
 - Requested: owner, 2026-10-12 („priprav strážne alarmy na backende“)
@@ -71,8 +71,51 @@ watching the console. Everything is defined in `template.yaml` and deployed by t
 ## Open questions
 (none; owner can change thresholds later via parameters)
 
+## Owner steps
+Before merge:
+1. **IAM → Policies → `InocubeWebSamDeploy`** → Edit → JSON → paste
+   [`inocube-web-sam-deploy-policy.json`](../aws/inocube-web-sam-deploy-policy.json) (4 new statements:
+   `AlarmTopic`, `GuardAlarms`, `LogMetricFilters`, `CostBudget`); same JSON in the permission-set copy.
+   `InocubeWebLambdaBoundary` is unchanged (the Lambdas do not call CloudWatch, SNS or Budgets).
+
+After merge:
+2. Watch **Actions → Deploy** (new resources only; nothing existing is replaced). On `AccessDenied`, the
+   stack rolls back cleanly: send the failing action from **CloudFormation → Events** to the orchestrator.
+3. Mail "AWS Notification - Subscription Confirmation" arrives at `inocube@varga.slmail.me` →
+   **Confirm subscription**. Until then no alarm mail is delivered. Check: **SNS → Topics →
+   `inocube-backend-alarms` → Subscriptions** shows `Confirmed`.
+4. **CloudWatch → Alarms**: 8 alarms `inocube-backend-*`, state `OK` or `Insufficient data` (both fine).
+   **Billing → Budgets**: `inocube-backend-monthly`, 5 USD.
+5. Optional test (any profile with `cloudwatch:SetAlarmState`, e.g. `inocube`):
+   ```powershell
+   aws cloudwatch set-alarm-state --alarm-name inocube-backend-health-errors --state-value ALARM --state-reason "Manual test" --region eu-central-1 --profile inocube
+   ```
+   Expect an "ALARM" mail now and an "OK" mail within ~5 minutes (the next evaluation finds no errors).
+6. Later changes: thresholds via parameters `ApiRequestsAlarmThreshold`, `MonthlyBudgetUsd`. Changing
+   `AlarmEmail` (or the budget percentages) replaces the budget: rename `BudgetName` in the same change.
+
 ## Implementation notes
-(implementer)
+- Branch `feat/T-005-guard-alarms`, PR: https://github.com/inocube/landing-backend/compare/main...feat/T-005-guard-alarms?expand=1
+- Local: ruff check, pytest (111 passed), SAM CLI 1.158.0 `sam validate --lint` and `sam build` pass.
+  Nothing run against AWS.
+- **Deploy-policy actions** come from the official CloudFormation resource provider schemas (`handlers`
+  create/read/update/delete) in `https://schema.cloudformation.eu-central-1.amazonaws.com/CloudformationSchema.zip`
+  (cfn-lint 1.48.0 bundled with SAM CLI strips `handlers`, so it could not be used). Resource-level scoping
+  checked in the AWS service reference JSON (`servicereference.us-east-1.amazonaws.com/v1/<service>/<service>.json`):
+  every added action supports its resource type, so **no `*` resource** was needed. SNS subscription actions
+  authorize against the topic ARN. Left out on purpose: `iam:GetRole`/`iam:PassRole` from the SNS handlers
+  (only for delivery-status logging or Firehose subscription roles, not used). `AWS::Budgets::Budget` has no
+  registry handlers (legacy resource): `budgets:ModifyBudget` covers create/update/delete of the budget and
+  its notifications, `budgets:ViewBudget` the reads; no tag actions (no `ResourceTags`, stack has no tags).
+- **API dimension**: local SAM translation shows the implicit API's name comes from the OpenAPI title
+  `!Ref AWS::StackName`, so `ApiName` = `inocube-backend`.
+- **Metric math** for `lambda-throttles` (both functions) and `dynamodb-errors` (`SystemErrors` +
+  `ThrottledRequests`, dimension `Operation=PutItem`, the only operation LeadsFunction calls), with `FILL(…, 0)`
+  so one missing series does not hide the other.
+- **Budget**: `EMAIL` subscribers directly, no SNS (an SNS subscriber would need a topic policy for
+  `budgets.amazonaws.com`). `NotificationsWithSubscribers` is create-only, hence owner step 6.
+- No CloudFormation output added; `ruff format` difference in `src/health/app.py` is pre-existing, untouched.
+- Unverified until deploy: exact CloudFormation call set for the legacy Budget resource; first alarm states.
 
 ## Architect review
 (architect: verdict approved / changes-requested, findings with file:line)
