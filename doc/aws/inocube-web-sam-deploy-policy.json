@@ -153,14 +153,19 @@
         "logs:DeleteRetentionPolicy",
         "logs:TagResource",
         "logs:UntagResource",
-        "logs:ListTagsForResource"
+        "logs:ListTagsForResource",
+        "logs:GetDataProtectionPolicy"
       ],
       "Resource": "arn:aws:logs:eu-central-1:754895435437:log-group:/aws/lambda/inocube-backend-*"
     },
     {
       "Sid": "LogsDescribe",
       "Effect": "Allow",
-      "Action": "logs:DescribeLogGroups",
+      "Action": [
+        "logs:DescribeLogGroups",
+        "logs:DescribeIndexPolicies",
+        "logs:DescribeResourcePolicies"
+      ],
       "Resource": "*"
     },
     {

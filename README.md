@@ -7,7 +7,7 @@ The frontend lives in a separate repo ([inocube/public](https://github.com/inocu
 
 ## Stack
 
-Python 3.14 on AWS Lambda (arm64) · API Gateway (REST) · DynamoDB (single table) · AWS SAM (IaC) ·
+Python 3.14 on AWS Lambda (arm64) · API Gateway (REST) · DynamoDB (single table) · SES (e-mail) · AWS SAM (IaC) ·
 IAM Identity Center (SSO) · region `eu-central-1`.
 
 ## Repository layout
@@ -40,6 +40,9 @@ curl.exe -i -X POST http://127.0.0.1:3000/leads -H "Content-Type: application/js
 
 The table must exist in DynamoDB Local first (in-memory, so again after every restart):
 `aws dynamodb create-table --cli-input-json file://local-test/table-schema.json --endpoint-url http://localhost:8000`.
+
+Local runs send no e-mail (`NOTIFY_TO` is empty in `local-test/sam-local-env.json`). To see the CORS answer:
+`curl.exe -i -X OPTIONS http://127.0.0.1:3000/leads -H "Origin: https://inocube.sk"`.
 
 ## Test
 

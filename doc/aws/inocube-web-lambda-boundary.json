@@ -42,7 +42,10 @@
         "ses:SendEmail",
         "ses:SendRawEmail"
       ],
-      "Resource": "arn:aws:ses:eu-central-1:754895435437:identity/inocube.sk"
+      "Resource": [
+        "arn:aws:ses:eu-central-1:754895435437:identity/inocube.sk",
+        "arn:aws:ses:eu-central-1:754895435437:identity/inocube@varga.slmail.me"
+      ]
     },
     {
       "Sid": "XRayTracing",

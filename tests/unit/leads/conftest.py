@@ -7,6 +7,7 @@ Lambda runs the leads code with ``src/leads/`` as its root, so the code uses fla
 import json
 import sys
 from pathlib import Path
+from typing import Any
 
 import boto3
 import pytest
@@ -16,6 +17,8 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPO_ROOT / "src" / "leads"))
 
 TABLE_NAME = "inocube-leads"
+NOTIFY_FROM = "noreply@inocube.sk"
+NOTIFY_TO = "owner@example.org"
 TABLE_SCHEMA = REPO_ROOT / "local-test" / "table-schema.json"
 
 
@@ -29,11 +32,16 @@ def aws_env(monkeypatch):
     monkeypatch.delenv("AWS_PROFILE", raising=False)
     monkeypatch.delenv("DYNAMODB_ENDPOINT", raising=False)
     monkeypatch.setenv("TABLE_NAME", TABLE_NAME)
-    import repository  # imported here, after src/leads is on sys.path
+    monkeypatch.setenv("NOTIFY_FROM", NOTIFY_FROM)
+    monkeypatch.setenv("NOTIFY_TO", NOTIFY_TO)
+    import notifier  # imported here, after src/leads is on sys.path
+    import repository
 
     repository._table.cache_clear()
+    notifier._ses.cache_clear()
     yield
     repository._table.cache_clear()
+    notifier._ses.cache_clear()
 
 
 @pytest.fixture
@@ -41,6 +49,24 @@ def mocked_aws(aws_env):
     """moto-backed AWS without any table (use for storage-failure tests)."""
     with mock_aws():
         yield
+
+
+@pytest.fixture
+def ses_domain(mocked_aws):
+    """Verified SES domain identity ``inocube.sk`` in moto, so sending from noreply@inocube.sk succeeds.
+
+    Without this fixture moto rejects the send (unverified sender), which is how tests simulate an SES failure.
+    """
+    boto3.client("sesv2").create_email_identity(EmailIdentity="inocube.sk")
+
+
+@pytest.fixture
+def outbox(mocked_aws) -> list[Any]:
+    """Live list of messages moto's SES backend accepted (SES v2 sends are recorded by the v1 backend)."""
+    from moto.core import DEFAULT_ACCOUNT_ID
+    from moto.ses.models import ses_backends
+
+    return ses_backends[DEFAULT_ACCOUNT_ID]["eu-central-1"].sent_messages
 
 
 @pytest.fixture
