@@ -84,7 +84,9 @@ After merge:
 3. Mail "AWS Notification - Subscription Confirmation" arrives at `inocube@varga.slmail.me` →
    **Confirm subscription**. Until then no alarm mail is delivered. Check: **SNS → Topics →
    `inocube-backend-alarms` → Subscriptions** shows `Confirmed`.
-4. **CloudWatch → Alarms**: 8 alarms `inocube-backend-*`, state `OK` or `Insufficient data` (both fine).
+4. **CloudWatch → Alarms**: 8 alarms `inocube-backend-*`, state `OK` or `Insufficient data` (both fine). Each alarm sends an `OK` mail when it
+   first leaves Insufficient data; after the subscription is confirmed (and whenever an alarm is re-created)
+   such `OK` mails are normal. If the first deploy rolled back, ignore that earlier confirmation mail.
    **Billing → Budgets**: `inocube-backend-monthly`, 5 USD.
 5. Optional test (any profile with `cloudwatch:SetAlarmState`, e.g. `inocube`):
    ```powershell

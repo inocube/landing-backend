@@ -54,7 +54,9 @@ GitHub Actions (OIDC role) ─▶ sam deploy: staging on PR merge, prod on relea
 
 All alarms: 5-minute period, 1 evaluation period, `TreatMissingData: notBreaching`, SNS topic
 `inocube-backend-alarms` (e-mail subscription to parameter `AlarmEmail`) on ALARM and OK. Each alarm's
-`AlarmDescription` says what to check first.
+`AlarmDescription` says what to check first. Some alarms depend on implicit names: `ApiName` = stack name
+(implicit SAM API) and DynamoDB `Operation=PutItem`. A task that adds an explicit API, a custom domain or
+another DynamoDB operation must update these alarms, or they stay silently OK.
 
 | Alarm | Metric | Fires when |
 |---|---|---|
