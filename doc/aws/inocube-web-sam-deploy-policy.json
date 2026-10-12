@@ -169,6 +169,59 @@
       "Resource": "*"
     },
     {
+      "Sid": "AlarmTopic",
+      "Effect": "Allow",
+      "Action": [
+        "sns:CreateTopic",
+        "sns:DeleteTopic",
+        "sns:GetTopicAttributes",
+        "sns:SetTopicAttributes",
+        "sns:TagResource",
+        "sns:UntagResource",
+        "sns:ListTagsForResource",
+        "sns:ListSubscriptionsByTopic",
+        "sns:GetDataProtectionPolicy",
+        "sns:PutDataProtectionPolicy",
+        "sns:Subscribe",
+        "sns:Unsubscribe",
+        "sns:GetSubscriptionAttributes",
+        "sns:SetSubscriptionAttributes"
+      ],
+      "Resource": "arn:aws:sns:eu-central-1:754895435437:inocube-backend-*"
+    },
+    {
+      "Sid": "GuardAlarms",
+      "Effect": "Allow",
+      "Action": [
+        "cloudwatch:PutMetricAlarm",
+        "cloudwatch:DescribeAlarms",
+        "cloudwatch:DeleteAlarms",
+        "cloudwatch:TagResource",
+        "cloudwatch:UntagResource",
+        "cloudwatch:ListTagsForResource"
+      ],
+      "Resource": "arn:aws:cloudwatch:eu-central-1:754895435437:alarm:inocube-backend-*"
+    },
+    {
+      "Sid": "LogMetricFilters",
+      "Effect": "Allow",
+      "Action": [
+        "logs:PutMetricFilter",
+        "logs:DeleteMetricFilter",
+        "logs:DescribeMetricFilters"
+      ],
+      "Resource": "arn:aws:logs:eu-central-1:754895435437:log-group:/aws/lambda/inocube-backend-*"
+    },
+    {
+      "Sid": "CostBudget",
+      "Effect": "Allow",
+      "Action": [
+        "budgets:ViewBudget",
+        "budgets:ModifyBudget"
+      ],
+      "Resource": "arn:aws:budgets::754895435437:budget/inocube-backend-*"
+    },
+    {
       "Sid": "ProdParameters",
       "Effect": "Allow",
       "Action": [

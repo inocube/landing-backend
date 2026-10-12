@@ -7,7 +7,8 @@ The frontend lives in a separate repo ([inocube/public](https://github.com/inocu
 
 ## Stack
 
-Python 3.14 on AWS Lambda (arm64) · API Gateway (REST) · DynamoDB (single table) · SES (e-mail) · AWS SAM (IaC) ·
+Python 3.14 on AWS Lambda (arm64) · API Gateway (REST) · DynamoDB (single table) · SES (e-mail) ·
+CloudWatch alarms + SNS + AWS Budgets (monitoring) · AWS SAM (IaC) ·
 IAM Identity Center (SSO) · region `eu-central-1`.
 
 ## Repository layout

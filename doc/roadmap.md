@@ -11,7 +11,7 @@ Tasks for the implementer are cut from the current phase into `doc/tasks/`.
 | 2b | Connect the website form | done (backend T-004, frontend `inocube/public` T-002), 2026-10-12 |
 | 3 | CI/CD with GitHub Actions + OIDC, staging + prod | in progress (prod deploy pulled forward, T-003) |
 | 4 | AI lead triage with Bedrock | planned |
-| 5 | Production hardening, `api.inocube.sk` | planned |
+| 5 | Production hardening, `api.inocube.sk` | planned (alarms + budget pulled forward, T-005) |
 | 6 | AI assistant on the website (RAG) | idea |
 
 ## 2. Leads API
@@ -40,7 +40,7 @@ Tasks for the implementer are cut from the current phase into `doc/tasks/`.
 
 ## 5. Hardening
 - Custom domain `api.inocube.sk` (ACM certificate, DNS at Websupport).
-- CloudWatch alarms (5xx, Lambda errors, throttles), AWS Budget alert.
+- CloudWatch alarms (5xx, Lambda errors, throttles), AWS Budget alert: pulled forward as T-005.
 - IAM review, data retention policy for leads (GDPR). SES production access (leave the sandbox).
 
 ## 6. AI assistant on the website

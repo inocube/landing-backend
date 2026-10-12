@@ -1,5 +1,7 @@
 import json
 import logging
+import re
+from pathlib import Path
 
 import app
 import pytest
@@ -9,6 +11,7 @@ VALID_LEAD = {
     "email": "jana.testovacia@example.com",
     "message": "Mam zaujem o spolupracu.\nDakujem, Jana",
 }
+TEMPLATE = Path(__file__).resolve().parents[3] / "template.yaml"
 PII = ["Jana", "Testovacia", "jana.testovacia", "example.com", "spolupracu", "owner@"]
 
 
@@ -86,6 +89,20 @@ def test_ses_failure_still_returns_201_and_logs_id_only(leads_table, outbox, cap
     )
     for value in PII:
         assert value.lower() not in logs.lower()
+
+
+def test_failure_log_line_matches_the_alarm_metric_filter(leads_table, outbox, caplog):
+    # The leads-notification-failed alarm counts log lines matching this CloudWatch filter pattern. If the
+    # log text in notifier.py changes, this test fails instead of the alarm going silent in production.
+    (pattern,) = re.findall(
+        r"""FilterPattern: '"([^"]+)"'""", TEMPLATE.read_text("utf-8")
+    )
+    assert pattern == "Lead notification failed"
+    caplog.set_level(logging.INFO)
+    post(VALID_LEAD)
+
+    (record,) = [r for r in caplog.records if r.levelno == logging.ERROR]
+    assert pattern in record.getMessage()
 
 
 def test_unexpected_notification_error_still_returns_201(

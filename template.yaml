@@ -10,6 +10,23 @@ Parameters:
     Description: >-
       Recipient of the new-lead e-mail. While SES is in the sandbox it must be a verified SES identity,
       and InocubeWebLambdaBoundary must allow its identity ARN (doc/tasks/T-004-leads-hardening.md).
+  AlarmEmail:
+    Type: String
+    Default: inocube@varga.slmail.me
+    AllowedPattern: "^[^@\\s]+@[^@\\s]+$"
+    Description: >-
+      Recipient of CloudWatch alarm and budget e-mails. A new address must confirm the SNS subscription mail.
+      Changing it also replaces MonthlyBudget, so give the budget a new BudgetName in the same change.
+  ApiRequestsAlarmThreshold:
+    Type: Number
+    Default: 300
+    MinValue: 1
+    Description: API requests per 5 minutes (all methods) above which the traffic-spike alarm fires.
+  MonthlyBudgetUsd:
+    Type: Number
+    Default: 10
+    MinValue: 1
+    Description: Monthly cost budget for the whole AWS account in USD (e-mail at 80 % actual, 100 % forecast).
 
 Globals:
   Function:
@@ -161,6 +178,283 @@ Resources:
               KeyType: RANGE
           Projection:
             ProjectionType: ALL
+
+  # ---------------------------------------------------------------------------------------------------------
+  # Guard alarms (T-005). CloudWatch evaluates each alarm every 5 minutes and e-mails the owner through SNS
+  # when it goes to ALARM and again when it is back to OK. No traffic is normal for this site, so missing
+  # data counts as "not breaching". Names start with the stack name (deploy policy is scoped to that prefix).
+  # ---------------------------------------------------------------------------------------------------------
+  AlarmTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub ${AWS::StackName}-alarms
+      DisplayName: inocube backend alarms
+  # The address must click the confirmation link SNS sends once; until then nothing is delivered.
+  AlarmEmailSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn: !Ref AlarmTopic
+      Protocol: email
+      Endpoint: !Ref AlarmEmail
+
+  LeadsErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub ${AWS::StackName}-leads-errors
+      AlarmDescription: >-
+        LeadsFunction (POST /leads) failed with an unhandled error or timeout; website visitors may see an
+        error instead of a confirmation. Check CloudWatch log group /aws/lambda/inocube-backend-leads for
+        ERROR lines and the request id, then the last deploy in GitHub Actions.
+      Namespace: AWS/Lambda
+      MetricName: Errors
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref LeadsFunction
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [!Ref AlarmTopic]
+      OKActions: [!Ref AlarmTopic]
+  HealthErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub ${AWS::StackName}-health-errors
+      AlarmDescription: >-
+        HealthFunction (GET /health) failed. This function has no dependencies, so a failure usually means a
+        broken deploy or a Lambda runtime problem. Check /aws/lambda/inocube-backend-health and the last
+        GitHub Actions deploy.
+      Namespace: AWS/Lambda
+      MetricName: Errors
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref HealthFunction
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [!Ref AlarmTopic]
+      OKActions: [!Ref AlarmTopic]
+  # One alarm over both functions with metric math: FILL turns "no data" into 0 so the sum always exists.
+  LambdaThrottlesAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub ${AWS::StackName}-lambda-throttles
+      AlarmDescription: >-
+        Lambda refused to run LeadsFunction or HealthFunction (throttled), so requests failed. This should
+        not happen at 5 req/s API throttling; it points to the account concurrency limit or a flood of
+        requests. Check the api-traffic-spike alarm and Lambda > Concurrency in the console.
+      Metrics:
+        - Id: leads
+          ReturnData: false
+          MetricStat:
+            Metric:
+              Namespace: AWS/Lambda
+              MetricName: Throttles
+              Dimensions:
+                - Name: FunctionName
+                  Value: !Ref LeadsFunction
+            Period: 300
+            Stat: Sum
+        - Id: health
+          ReturnData: false
+          MetricStat:
+            Metric:
+              Namespace: AWS/Lambda
+              MetricName: Throttles
+              Dimensions:
+                - Name: FunctionName
+                  Value: !Ref HealthFunction
+            Period: 300
+            Stat: Sum
+        - Id: throttles
+          Label: Throttles of both functions
+          Expression: FILL(leads, 0) + FILL(health, 0)
+          ReturnData: true
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [!Ref AlarmTopic]
+      OKActions: [!Ref AlarmTopic]
+  LeadsDurationAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub ${AWS::StackName}-leads-duration
+      AlarmDescription: >-
+        A POST /leads call took 12 s or more; the function times out at 15 s. Usually SES or DynamoDB is slow
+        (the SES client may retry once). Check /aws/lambda/inocube-backend-leads and X-Ray traces. A timeout
+        after the lead was stored can make the browser retry and store the lead twice.
+      Namespace: AWS/Lambda
+      MetricName: Duration
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref LeadsFunction
+      Statistic: Maximum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 12000
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [!Ref AlarmTopic]
+      OKActions: [!Ref AlarmTopic]
+  # The implicit SAM API is named after the stack, so its ApiName dimension is the stack name.
+  Api5xxAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub ${AWS::StackName}-api-5xx
+      AlarmDescription: >-
+        API Gateway answered with a 5xx (500/502/503/504): a Lambda error or timeout, or an API Gateway
+        problem. Visitors saw an error. Check the leads-errors and leads-duration alarms, then the Lambda logs.
+      Namespace: AWS/ApiGateway
+      MetricName: 5XXError
+      Dimensions:
+        - Name: ApiName
+          Value: !Ref AWS::StackName
+        - Name: Stage
+          Value: Prod
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [!Ref AlarmTopic]
+      OKActions: [!Ref AlarmTopic]
+  ApiTrafficSpikeAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub ${AWS::StackName}-api-traffic-spike
+      AlarmDescription: !Sub >-
+        More than ${ApiRequestsAlarmThreshold} API requests in 5 minutes (all methods). A contact form gets a
+        few per day, so this is most likely a bot or abuse, and it costs money. Check /aws/lambda/inocube-backend-leads
+        for honeypot hits and DynamoDB inocube-leads for junk leads. Throttling (5 req/s per method) still applies.
+      Namespace: AWS/ApiGateway
+      MetricName: Count
+      Dimensions:
+        - Name: ApiName
+          Value: !Ref AWS::StackName
+        - Name: Stage
+          Value: Prod
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: !Ref ApiRequestsAlarmThreshold
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [!Ref AlarmTopic]
+      OKActions: [!Ref AlarmTopic]
+  # Turns the log line from src/leads/notifier.py into a metric. Pinned by
+  # tests/unit/leads/test_notification.py so a reworded log line breaks a test, not this alarm.
+  LeadNotificationFailedMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref LeadsLogGroup
+      FilterPattern: '"Lead notification failed"'
+      MetricTransformations:
+        - MetricNamespace: Inocube/Backend
+          MetricName: LeadNotificationFailed
+          MetricValue: "1"
+          DefaultValue: 0
+  LeadNotificationFailedAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub ${AWS::StackName}-leads-notification-failed
+      AlarmDescription: >-
+        A lead was stored but the e-mail to the owner was NOT sent, so nobody has seen it. Open DynamoDB table
+        inocube-leads (newest items) to read the lead, and find "Lead notification failed" in
+        /aws/lambda/inocube-backend-leads for the lead_id and the SES error code.
+      Namespace: Inocube/Backend
+      MetricName: LeadNotificationFailed
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [!Ref AlarmTopic]
+      OKActions: [!Ref AlarmTopic]
+  # SystemErrors and ThrottledRequests are published per operation; LeadsFunction only calls PutItem.
+  DynamoDbErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub ${AWS::StackName}-dynamodb-errors
+      AlarmDescription: >-
+        DynamoDB table inocube-leads returned a system error or throttled a PutItem, so a lead may not have
+        been stored (the visitor got a 500). Check the AWS Health Dashboard for DynamoDB in eu-central-1 and
+        /aws/lambda/inocube-backend-leads. New operations (e.g. UpdateItem) need adding to this alarm.
+      Metrics:
+        - Id: systemerrors
+          ReturnData: false
+          MetricStat:
+            Metric:
+              Namespace: AWS/DynamoDB
+              MetricName: SystemErrors
+              Dimensions:
+                - Name: TableName
+                  Value: !Ref LeadsTable
+                - Name: Operation
+                  Value: PutItem
+            Period: 300
+            Stat: Sum
+        - Id: throttled
+          ReturnData: false
+          MetricStat:
+            Metric:
+              Namespace: AWS/DynamoDB
+              MetricName: ThrottledRequests
+              Dimensions:
+                - Name: TableName
+                  Value: !Ref LeadsTable
+                - Name: Operation
+                  Value: PutItem
+            Period: 300
+            Stat: Sum
+        - Id: errors
+          Label: DynamoDB system errors and throttled PutItem
+          Expression: FILL(systemerrors, 0) + FILL(throttled, 0)
+          ReturnData: true
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [!Ref AlarmTopic]
+      OKActions: [!Ref AlarmTopic]
+
+  # Account-wide cost budget (all services, not just this stack). AWS Budgets e-mails the subscriber
+  # directly; cost data arrives with a delay of several hours. NotificationsWithSubscribers cannot be updated
+  # in place: changing AlarmEmail or the percentages replaces the budget, so change BudgetName with it.
+  MonthlyBudget:
+    Type: AWS::Budgets::Budget
+    Properties:
+      Budget:
+        BudgetName: !Sub ${AWS::StackName}-monthly
+        BudgetType: COST
+        TimeUnit: MONTHLY
+        BudgetLimit:
+          Amount: !Ref MonthlyBudgetUsd
+          Unit: USD
+      NotificationsWithSubscribers:
+        - Notification:
+            NotificationType: ACTUAL
+            ComparisonOperator: GREATER_THAN
+            Threshold: 80
+            ThresholdType: PERCENTAGE
+          Subscribers:
+            - SubscriptionType: EMAIL
+              Address: !Ref AlarmEmail
+        - Notification:
+            NotificationType: FORECASTED
+            ComparisonOperator: GREATER_THAN
+            Threshold: 100
+            ThresholdType: PERCENTAGE
+          Subscribers:
+            - SubscriptionType: EMAIL
+              Address: !Ref AlarmEmail
 
 Outputs:
   ApiUrl:
