@@ -25,7 +25,7 @@ Last updated: 2026-10-12
 
 - T-005 guard alarms (PR `feat/T-005-guard-alarms`, in review): 8 CloudWatch alarms (Lambda errors,
   throttles, duration; API 5xx and traffic spike; DynamoDB errors; failed lead e-mail via a log metric
-  filter) e-mailed through SNS topic `inocube-backend-alarms` on ALARM and OK, plus an account-wide 5 USD
+  filter) e-mailed through SNS topic `inocube-backend-alarms` on ALARM and OK, plus an account-wide 10 USD
   monthly budget. Owner must update `InocubeWebSamDeploy` before merge and confirm the SNS mail after.
 
 ## Not done yet

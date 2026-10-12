@@ -24,7 +24,7 @@ Parameters:
     Description: API requests per 5 minutes (all methods) above which the traffic-spike alarm fires.
   MonthlyBudgetUsd:
     Type: Number
-    Default: 5
+    Default: 10
     MinValue: 1
     Description: Monthly cost budget for the whole AWS account in USD (e-mail at 80 % actual, 100 % forecast).
 

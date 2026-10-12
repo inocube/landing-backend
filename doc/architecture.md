@@ -68,7 +68,7 @@ another DynamoDB operation must update these alarms, or they stay silently OK.
 | `leads-notification-failed` | `Inocube/Backend LeadNotificationFailed` from a metric filter on `LeadsLogGroup` (`"Lead notification failed"`) | Sum ≥ 1 |
 | `dynamodb-errors` | `AWS/DynamoDB SystemErrors` + `ThrottledRequests`, `Operation` = PutItem (metric math) | Sum ≥ 1 |
 
-Budget `inocube-backend-monthly`: account-wide COST, `MonthlyBudgetUsd` (5 USD); e-mail to `AlarmEmail` at
+Budget `inocube-backend-monthly`: account-wide COST, `MonthlyBudgetUsd` (10 USD); e-mail to `AlarmEmail` at
 ACTUAL > 80 % and FORECASTED > 100 %. Budgets data lags by hours.
 
 ## Data model

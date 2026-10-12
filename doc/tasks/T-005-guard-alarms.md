@@ -38,7 +38,7 @@ watching the console. Everything is defined in `template.yaml` and deployed by t
    - `dynamodb-errors`: `AWS/DynamoDB` `SystemErrors` or `ThrottledRequests` on `inocube-leads`, Sum ≥ 1.
    Every alarm has an `AlarmDescription` in plain English saying what it means and what to check first.
 4. `AWS::Budgets::Budget` `${AWS::StackName}-monthly`, COST, MONTHLY, parameter `MonthlyBudgetUsd`
-   (default 5). Notifications by e-mail to `AlarmEmail`: ACTUAL > 80 %, FORECASTED > 100 %.
+   (default 10). Notifications by e-mail to `AlarmEmail`: ACTUAL > 80 %, FORECASTED > 100 %.
    Note: the budget is account-wide (all services), which is what the owner wants.
 5. `doc/aws/inocube-web-sam-deploy-policy.json`: add the narrowest actions the deploy needs, scoped by ARN:
    CloudWatch alarms `arn:aws:cloudwatch:eu-central-1:754895435437:alarm:inocube-backend-*`, SNS topic
@@ -87,7 +87,7 @@ After merge:
 4. **CloudWatch → Alarms**: 8 alarms `inocube-backend-*`, state `OK` or `Insufficient data` (both fine). Each alarm sends an `OK` mail when it
    first leaves Insufficient data; after the subscription is confirmed (and whenever an alarm is re-created)
    such `OK` mails are normal. If the first deploy rolled back, ignore that earlier confirmation mail.
-   **Billing → Budgets**: `inocube-backend-monthly`, 5 USD.
+   **Billing → Budgets**: `inocube-backend-monthly`, 10 USD.
 5. Optional test (any profile with `cloudwatch:SetAlarmState`, e.g. `inocube`):
    ```powershell
    aws cloudwatch set-alarm-state --alarm-name inocube-backend-health-errors --state-value ALARM --state-reason "Manual test" --region eu-central-1 --profile inocube
@@ -147,7 +147,7 @@ Findings (none blocking):
    only `api-5xx` does. Correct, but the owner should not expect both mails.
 
 Questions for the owner
-- Is the account's current monthly spend clearly under 5 USD (Route 53, SES, other projects)? Otherwise the
-  80 % ACTUAL mail arrives right after deploy; set `MonthlyBudgetUsd` accordingly.
+- Answered 2026-10-12: current spend is about 5 USD a month, limit 10 USD, so `MonthlyBudgetUsd` defaults to 10
+  (80 % ACTUAL mail at 8 USD).
 - If the first deploy rolls back after the SNS subscription was created, a confirmation mail for a deleted
   subscription may arrive: ignore it and confirm only the mail that arrives after the green deploy.
