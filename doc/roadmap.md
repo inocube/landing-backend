@@ -8,7 +8,7 @@ Tasks for the implementer are cut from the current phase into `doc/tasks/`.
 | 0 | Skeleton: SSO, SAM, health Lambda, branch protection | done |
 | 1 | DynamoDB table and key design | done |
 | 2 | Leads API: POST /leads | done |
-| 2b | Connect the website form | in progress (backend T-004, frontend `inocube/public` T-002) |
+| 2b | Connect the website form | done (backend T-004, frontend `inocube/public` T-002), 2026-10-12 |
 | 3 | CI/CD with GitHub Actions + OIDC, staging + prod | in progress (prod deploy pulled forward, T-003) |
 | 4 | AI lead triage with Bedrock | planned |
 | 5 | Production hardening, `api.inocube.sk` | planned |
